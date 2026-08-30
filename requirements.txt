@@ -1,0 +1,17 @@
+flask
+flask-cors
+opencv-python-headless
+numpy
+tifffile
+affine
+rasterio
+geopandas
+pyproj
+torch
+torchvision
+scikit-image
+lpips
+albumentations
+pillow
+gunicorn
+pytest

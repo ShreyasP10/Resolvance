@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Resolvance — Basic</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<header>
+  <h1>Resolvance</h1>
+  <p>SIH26142 • 10m Sentinel-2 → 3.3m SR • Basic Demo</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Upload</h2>
+    <p class="muted">Supports .tif/.tiff/.png/.jpg (≤50MB) • 1/3/4/8-band auto-detect</p>
+    <div id="drop" class="drop">
+      <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg">
+      <button onclick="upload()">Run 3× Super-Resolution</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+
+  <section id="results" class="card" style="display:none">
+    <h2>2. Results</h2>
+    <div class="images">
+      <div><h3>Input (10m)</h3><img id="img-input"></div>
+      <div><h3>SR (3.3m)</h3><img id="img-sr"></div>
+      <div><h3>Heatmap</h3><img id="img-heat"></div>
+    </div>
+
+    <label class="slider-label">
+      Compare Input with:
+      <select id="right-layer" onchange="updateLayers()">
+        <option value="sr">SR (3.3m)</option>
+        <option value="heat">Heatmap</option>
+      </select>
+      <input type="range" id="slider" min="0" max="100" value="50"> 
+      <span id="slider-val">50%</span>
+    </label>
+    <div class="preview-compare">
+      <div class="compare" id="compare">
+        <img id="c-right">
+        <img id="c-input">
+        <div id="handle" class="handle"></div>
+      </div>
+    </div>
+
+    <!-- Telemetry + Downloads -->
+    <div class="two">
+      <div>
+        <h3>Telemetry</h3>
+        <pre id="meta"></pre>
+        <div id="crs-card" class="proof-card"></div>
+        <div id="downloads" class="downloads"></div>
+      </div>
+      <div>
+        <h3>Metrics</h3>
+        <pre id="metrics"></pre>
+        <div id="proof" class="proof-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Direct Proof for Judge</h2>
+    <ul class="info">
+      <li><b>CRS:</b> Viewer shows <code>meta crs EPSG:32643</code> + <code>download_tif</code> COG → open in QGIS → overlay check</li>
+      <li><b>SAM:</b> <code>sam_mean_deg</code> &lt;3° proves spectral (no NIR strip)</li>
+      <li><b>NDVI:</b> <code>ndvi_corr</code> &gt;0.98 proves vegetation index intact</li>
+      <li><b>RMSE:</b> <code>rmse_px</code> &lt;0.3px proves Affine.scale geospatial fidelity</li>
+      <li><b>API:</b> <code>POST /api/infer</code> multipart <code>file</code> • <code>GET /api/health</code></li>
+    </ul>
+  </section>
+</main>
+
+<footer>Resolvance • SIH26142 NTRO • Basic UI • Flask</footer>
+<script src="/static/js/app.js"></script>
+</body>
+</html>

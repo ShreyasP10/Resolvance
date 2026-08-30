@@ -1,0 +1,1836 @@
+﻿# SIH26142 Full Documentation Suite â€” Index
+
+**Product:** Sentinel-SRM (Kepler-404 Fork) â€” Deep Learning Based Super Resolution Mapping 10m Sentinel-2 â†’ <4m (3.3m)  
+**PS ID:** SIH26142 | **Org:** NTRO | **Theme:** Space Technology (Software) | **Date:** 2026-08-29  
+**Base:** `Kepler-404/` Flask+Rasterio 200mâ†’100m TIR mock â†’ extended to N-channel Sentinel-2
+
+| # | Doc | Full Form | Purpose | File |
+|---|---|---|---|---|
+| 01 | PRD | Product Requirements Document | What to build | `01_PRD.md` |
+| 02 | BRD | Business Requirements Document | Business needs & value | `02_BRD.md` |
+| 03 | MRD | Market Requirements Document | Market/customer needs | `03_MRD.md` |
+| 04 | FRD | Functional Requirements Document | What system must do | `04_FRD.md` |
+| 05 | SRS | Software Requirements Specification | Detailed software spec (IEEE 830) | `05_SRS.md` |
+| 06 | TRD | Technical Requirements Document | Technical constraints | `06_TRD.md` |
+| 07 | DRD | Design Requirements Document | Design/UX requirements | `07_DRD.md` |
+| 08 | TDD | Technical Design Document | How to implement | `08_TDD.md` |
+| 09 | SDD | Software Design Document | Detailed architecture | `09_SDD.md` |
+| 10 | HLD | High-Level Design | Overall system architecture | `10_HLD.md` |
+| 11 | LLD | Low-Level Design | Classes/APIs/DB/algorithms | `11_LLD.md` |
+
+### Reading Order
+
+* **Product/Business:** PRD â†’ BRD â†’ MRD
+* **Functional:** FRD â†’ SRS
+* **Design/Tech:** DRD â†’ TRD â†’ TDD â†’ SDD â†’ HLD â†’ LLD
+
+### Quick Traceability
+
+* Pain/PS: `prompt.txt:4-52` â†’ PRD Â§1-5, BRD Â§1-2
+* Mock pipeline: `kepler/pipeline.py:32-91`, `transforms.py:34-45`, `io.py:55-142` â†’ TDD/SDD/HLD
+* Visual rules: `sih py ppt.txt:8-36` + `SIH2024_IDEA_Presentation_Format.pptx` â†’ DRD Â§2-4
+* Metrics: `prompt.txt:62-66` â†’ PRD Â§8, SRS Â§3.6, SDD Â§6.5
+
+### Status
+
+All 11 docs generated at `docs/SIH26142/`. Next: implement Phase M1 (multi-band I/O + tiling) per TDD Â§4.
+
+### PPT Blueprint
+
+For 6-slide SIH deck text+image prompts, see previous plan message (Slide 1-6 perfect text). That blueprint aligns 1:1 with PRD/DRD visual system.
+# PRD â€” Product Requirements Document
+## SIH26142: Deep Learning Based Super Resolution Mapping from Medium Resolution Satellite Imagery
+
+**Product:** Sentinel-SRM (Kepler-404 Fork) | **Org:** NTRO â€” Space Technology (Software) | **PS ID:** SIH26142  
+**Version:** 1.0 | **Date:** 2026-08-29 | **Author:** Shreyas Pawar (Kepler-404) | **Status:** Draft â†’ Implementation
+
+---
+
+### 1. Purpose
+Transform free 10m Sentinel-2 L2A imagery into scientifically-reliable `<4m` (target 3.3m, 3Ã—) super-resolved GeoTIFFs while preserving geospatial (CRS/affine) and spectral (SAM) consistency, with per-pixel uncertainty for intelligence/decision use. Built as fork of `Kepler-404` (200mâ†’100m TIR pipeline, Flask+Rasterio) to meet NTRO SRM spec (`prompt.txt:47-52`).
+
+### 2. Goals & Non-Goals
+
+| Goals (Must Deliver) | Non-Goals (Out of Scope for SIH Internal) |
+|---|---|
+| N-channel (4-band RGB+NIR, dynamic up to 8) GeoTIFF in â†’ COG GeoTIFF out with identical CRS | Full 13-band Sentinel-2 or hyperspectral at submission (future) |
+| PSNR/SSIM + SAM + ERGAS + NDVI-delta validation vs high-res ref | Pan-India real-time streaming pipeline (future) |
+| Uncertainty heatmap (MC-Dropout/ensemble) per pixel | TIRâ†’RGB colorization branch (kept as optional flag, not primary) |
+| Patch-based seamless processing for GB scenes | Classification/change-detection downstream (nice-to-have only) |
+
+### 3. Stakeholders
+
+| Stakeholder | Role | Need |
+|---|---|---|
+| NTRO analysts | Primary user | Reliable sub-pixel detail without hallucination (`prompt.txt:106` bridge Q) |
+| Urban planners / Disaster units | Secondary | Road/building/field boundary visibility (`prompt.txt:6`) |
+| ISRO/SAC evaluators | Judge | Geospatial fidelity (overlay on Google Earth) + spectral truth (`prompt.txt:64-66`) |
+| AgTech / Research | Tertiary | NDVI-compatible output (`prompt.txt:68`) |
+
+### 4. User Personas
+
+**Analyst Arjun (NTRO):** Needs to overlay SR output on Bhuvan/QGIS, run NDVI, distrusts GAN hallucinations â€” requires uncertainty mask.  
+**Planner Priya (Urban):** Uploads district Sentinel-2 clip, expects 3Ã— sharper roads/buildings in <30s for planning.
+
+### 5. Scope
+
+**In-Scope:** Ingest, tiling, N-channel ESRGAN/SwinIR 3Ã—, SAM-regularized loss, stitch + COG export, viewer with 3-way slider + 4th uncertainty layer, metrics dashboard.  
+**Out-of-Scope:** Satellite tasking, real-time downlink, SAR fusion, mobile app.
+
+### 6. User Stories (Prioritized)
+
+1. As Arjun, I upload a 10m 4-band `.tif` (50MB) â†’ get `<4m` GeoTIFF + heatmap so I can verify reliability per pixel.
+2. As Priya, I see side-by-side 10m / SR / heatmap with DN stats so I can decide to trust.
+3. As evaluator, I download COG and validate PSNR/SSIM/SAM in report.
+4. As developer, I train on synthetic 0.5mâ†’10m pairs (SpaceNet) when real pairs unavailable (`prompt.txt:103`).
+
+### 7. Product Requirements
+
+| ID | Requirement | Priority | Acceptance |
+|---|---|---|---|
+| PR-01 | Accept `.tif/.tiff` 1/3/4/8-band, â‰¤50MB, preserve CRS/transform (`kepler/io.py:55-66`) | P0 | Round-trip `Affine.scale` test passes |
+| PR-02 | Auto-detect channel count, dynamic 1Ã—1 conv in/out | P0 | 4-band & 8-band on-spot file works (`prompt.txt:98`) |
+| PR-03 | 3Ã— upscale (10mâ†’3.3m) via tiled inference 256Ã—256+16 overlap, Gaussian blend | P0 | No seam lines, <8GB RAM on 1GB input |
+| PR-04 | Loss `L1 + Perceptual + Î»Â·SAM` (`prompt.txt:88`) | P0 | SAM <3Â° on validation |
+| PR-05 | Uncertainty heatmap (MC-Dropout T=10 or 3-model ensemble) | P0 | Pearson>0.6 between uncertainty and error |
+| PR-06 | Metrics panel: PSNR, SSIM, LPIPS, SAM, ERGAS, NDVI-delta | P0 | Rendered on result page |
+| PR-07 | COG GeoTIFF + PNG download, `/api/infer` contract unchanged (`Kepler-404/README.md:167`) | P0 | QGIS overlay pixel-perfect |
+| PR-08 | Viewer 4-layer (input/SR/heatmap/comparison) | P1 | Interactive slider, mobile responsive |
+| PR-09 | Batch API for folder of tiles | P2 | Future |
+
+### 8. Success Metrics
+
+* PSNR â‰¥28dB, SSIM â‰¥0.80 on synthetic holdout; SAM <3Â°, ERGAS <2.5
+* Geospatial RMSE <0.3 pixel after overlay
+* Demo latency: â‰¤30s for 1024Ã—1024 4-band on CPU; â‰¤10s on GPU
+* SIH internal: 6-slide deck compliant (see PRD Â§7 â†’ PPT blueprint)
+
+### 9. Constraints & Assumptions
+
+* Paired real 10mâ†”3m same-day data unavailable â†’ assume synthetic degradation (`prompt.txt:101-103`).
+* GPU for training (Colab Pro/AWS `prompt.txt:18`); inference CPU-able.
+* Max file 50MB (`Kepler-404/README.md:281`) â€” larger via tiling/pagination.
+
+### 10. Roadmap
+
+* **M1 (Wk1):** Multi-band I/O + tiling + synthetic dataset 10k tiles
+* **M2 (Wk2):** EDSR baseline â†’ SwinIR N-ch + SAM training, metrics harness
+* **M3 (Wk3):** Uncertainty head, viewer 4-layer, COG export, SIH deck + demo deploy
+
+### 11. Open Decisions
+
+* 4-band MVP vs 13-band â€” default 4-band for submission.
+* Keep TIR branch as `--mode=tir` flag or remove â€” default remove.
+
+---
+*Traceability: PRD derives from `prompt.txt:4-52`, `Kepler-404/kepler/pipeline.py:32-91`, `SIH2026_PPT_Submission_Template.md:22-52`.*
+# BRD â€” Business Requirements Document
+## SIH26142 NTRO Super Resolution Mapping
+
+**Business Owner:** NTRO (National Technical Research Organisation) | **Product:** Sentinel-SRM | **Theme:** Space Technology (Software)
+
+### 1. Business Need
+Indiaâ€™s Earth Observation free data (Sentinel-2 10m, frequent revisit) is under-utilized for fine-scale analysis (roads, buildings, field boundaries, localized damage) because structural detail is insufficient (`prompt.txt:5-7`). Procuring commercial <1m imagery (Maxar/Planet) costs thousands per scene and has low revisit. NTRO, ISRO, disaster authorities need a sovereign, cost-free method to extract `<4m` value from existing EO assets.
+
+### 2. Business Objectives
+
+| Objective | KPI | Target |
+|---|---|---|
+| Reduce dependency on commercial high-res procurement | Cost per analyzed kmÂ² | â†“70% vs Maxar scene price |
+| Enable sub-pixel decision confidence | Hallucination rate | <2% false structures (via uncertainty) |
+| Preserve scientific utility | NDVI correlation (post-SR vs pre-SR) | r >0.98 |
+| Deployment sovereignty | On-prem inference (air-gapped) | Works offline, no foreign API |
+
+### 3. Business Scope
+
+**In Scope:** Business case for SIH internal hackathon â†’ NTRO on-prem pipeline for Sentinel-2 over Indian airspace (`prompt.txt:33` national pipeline).  
+**Out of Scope:** Satellite manufacturing, direct tasking, raw downlink infrastructure.
+
+### 4. Stakeholders & Value
+
+| Stakeholder | Business Value |
+|---|---|
+| NTRO / MHA | Intelligence advantage, faster disaster assessment |
+| ISRO/SAC | Maximizes ROI on open EO data |
+| Ministry of Rural Development / Urban | Panchayat-level mapping without new surveys |
+| AgTech (Ecozen, DeHaat adjacency) | Field-boundary pricing without drone flights |
+| Business (Product Team) | SIH win â†’ internship â†’ ministry deployment (`SIH2026_About_SIH.md:43-48` 5-step adoption) |
+
+### 5. Business Requirements
+
+| ID | Business Requirement | Priority |
+|---|---|---|
+| BR-01 | Provide 10mâ†’<4m enhancement that is scientifically reliable (spectral + georeference truth) | P0 |
+| BR-02 | Must quantify uncertainty per pixel to avoid fatal tactical errors (`prompt.txt:106`) | P0 |
+| BR-03 | Operate on open data (Sentinel-2, SpaceNet synthetic) â€” no proprietary data dependency | P0 |
+| BR-04 | Support QGIS/ArcGIS workflows (COG GeoTIFF + affine preservation `kepler/pipeline.py:87-91`) | P0 |
+| BR-05 | Cost model: free at inference, training via academic GPU (Colab Pro) | P1 |
+| BR-06 | Compliance: No data exfiltration, on-prem deployable (mirrors `Kepler-404` local Flask) | P0 |
+
+### 6. Business Rules
+
+* BR-R1: No hallucinated structures without high uncertainty flag â€” verifier veto (`prompt.txt:108` answer).
+* BR-R2: Spectral signature (SAM) must remain within 3Â° to keep agriculture/disaster indices valid.
+* BR-R3: File output must retain EPSG and be overlay-accurate (`SIH2026_RESEARCH_AND_ANALYSIS.md:65` geospatial fidelity).
+
+### 7. Market & Competitive Context (BRD Lens)
+
+* Direct: None sovereign for Sentinel-2â†’<4m in India (SR research exists but no operational NTRO-grade product `SIH2026_RESEARCH_AND_ANALYSIS.md:354`).
+* Adjacent: Topaz Labs (photography, strips metadata `prompt.txt:38`), Pix4D (drone), KSAT/EMSA (oil spill, not SR).
+* Advantage: Sovereign + spectral-aware + uncertainty â€” enterprise incumbents are foreign/expensive.
+
+### 8. Cost-Benefit (High Level)
+
+* **Cost:** Training 1Ã— ~40 GPU-hours (Colab Pro ~â‚¹2k), infra Flask+Rasterio open-source.
+* **Benefit:** Per 10k kmÂ², saves ~â‚¹5-10L vs commercial procurement; reuse across ministries (DRDO, MoES).
+
+### 9. Risks (Business)
+
+| Risk | Mitigation |
+|---|---|
+| Model hallucinates â†’ wrong intel | Uncertainty heatmap + human-in-loop |
+| No real paired data | Synthetic degradation business-approved (`prompt.txt:103`) |
+| Judge tests NIR/NDVI and fails | N-channel + SAM loss (`prompt.txt:112`) |
+
+### 10. Acceptance Criteria (Business)
+
+* NTRO evaluator can run NDVI on output and get comparable result to input.
+* Demo on real Sentinel-2 tile completes and overlay matches Google Earth within 1 pixel.
+# MRD â€” Market Requirements Document
+## SIH26142 Sentinel Super Resolution
+
+### 1. Market Overview
+
+* **EO Data Market:** Global EO analytics $8B+ (2024), India EO ~$1B with Sentinel-2 as free backbone. 10-30m medium-res dominates due to revisit but lacks fine detail for cadastral/urban/disaster (`prompt.txt:5`).
+* **Gap:** Mediumâ†’High SR is research (ESRGAN/SwinIR) but no metadata-preserving, spectral-consistent product for Indian EO stack.
+
+### 2. Customer Segments
+
+| Segment | Need | Willingness |
+|---|---|---|
+| **Primary: Intelligence/Defence (NTRO)** | See 3m buildings/roads without foreign buy | High â€” mission critical |
+| **Secondary: Government (ISRO, NDMA, Urban)** | Panchayat-level flood/urban mapping | High â€” sovereign |
+| **Tertiary: AgTech/Insurance** | Field boundary, damage assessment | Medium â€” cost saving |
+| **Quaternary: Research/GIS firms** | Publishable, QGIS-ready SR | Medium |
+
+### 3. Customer Needs (Validated via PS)
+
+* Must be **physically consistent** (blackbody/NIR truth) not pretty RGB hallucinations (`prompt.txt:38-40`).
+* Must handle **multi-band GeoTIFF** (not JPG) or it fails instantly (`prompt.txt:55`).
+* Needs **uncertainty** to manage liability (`prompt.txt:42`).
+
+### 4. Competitive Landscape
+
+| Competitor | Type | Price | Gap vs Sentinel-SRM |
+|---|---|---|---|
+| Topaz Photo AI | Photography upscaler | $199 | Strips CRS+ NIR, not geospatial |
+| Intertek HoneyTrace / Pix4D | Vertical SaaS | Enterprise | Not EO SR |
+| Chainalysis etc (crypto cluster) | N/A | â€” | Irrelevant but shows SIH crowding `SIH2026_RESEARCH_AND_ANALYSIS.md:44-53` |
+| KSAT Oil Spill (SAR) | Niche foreign | Enterprise | Few players, not India sovereign |
+| Research ESRGAN on SpaceNet | Paper/code | Free | Hallucinates, no SAM/uncertainty |
+
+**Positioning:** Only open, sovereign, spectral+uncertainty-aware SR for Sentinel-2 â†’ India airspace.
+
+### 5. Market Requirements
+
+| ID | Market Requirement | Priority |
+|---|---|---|
+| MR-01 | Open-data trained, no commercial licence per scene | P0 |
+| MR-02 | QGIS/ArcGIS compatible COG output | P0 |
+| MR-03 | Sub-4m with quantified uncertainty for risk-averse buyers | P0 |
+| MR-04 | On-prem deployable (air-gapped ministries) | P0 |
+| MR-05 | Web demo for non-GIS users (Kepler Vercel parity) | P1 |
+
+### 6. Market Sizing (Conservative)
+
+* India 3.2M kmÂ² Ã— Sentinel-2 revisit 5d = 230M kmÂ²/year processed. Even 1% adoption (planners) = 2.3M kmÂ² SR demand. At â‚¹5/kmÂ² saved vs commercial, TAM ~â‚¹11Cr/year India Gov alone.
+
+### 7. Go-to-Market (Post-SIH)
+
+* **Phase 1:** SIH win â†’ NTRO internship â†’ beta on one state (Maharashtra) (`SIH2026_About_SIH.md:43-48`).
+* **Phase 2:** STAC catalog + Bhuvan integration.
+* **Phase 3:** Offer as paid API for private AgTech (freemium 10 tiles/day).
+
+### 8. Differentiation
+
+* Spectral loss + dynamic N-channel (vs RGB-only papers).
+* Synthetic degradation solves data moat (SpaceNet 0.5mâ†’10m).
+* Uncertainty heatmap is unique selling proposition for defence.
+
+### 9. Customer Validation Plan
+
+* Interview 3 NTRO/ISRO contacts via SIH mentoring (`SIH2026_About_SIH.md:59`).
+* Demo on real Sentinel-2 tile, ask: "Would you run NDVI on this?" â€” yes = pass.
+# FRD â€” Functional Requirements Document
+## SIH26142 Sentinel-SRM
+
+### 1. Overview
+Defines what the system **must do** (functions), derived from PRD Â§7 and `prompt.txt:45-53`.
+
+### 2. Actors
+
+* Analyst (upload, view, download), Evaluator (validate), System (auto-purge 24h `Kepler-404/README.md:284`).
+
+### 3. Functional Requirements
+
+| ID | Function | Input | Output | Rule |
+|---|---|---|---|---|
+| FR-01 | Ingest GeoTIFF | `.tif/.tiff` 1/3/4/8-band â‰¤50MB | NÃ—HÃ—W float32 + CRS/affine + job_id | Preserve CRS via `kepler/io.py:24-34` Affine+EPSG tags |
+| FR-02 | Validate file | File header | Accept/reject 400/415 JSON | Reject non-GeoTIFF/image with clean error (`Kepler-404/README.md:204`) |
+| FR-03 | Normalize | NÃ—HÃ—W raw DN | NÃ—HÃ—W uint8 0-255 | Per-band 2-98 percentile clip (`kepler/io.py:85-96`) |
+| FR-04 | Tile image | HÃ—WÃ—C, tile 256+16 overlap | List of tiles + coords | Gaussian blend weights for seam removal |
+| FR-05 | Super-resolve tile | 256Ã—256Ã—C | 768Ã—768Ã—C (3Ã—) | `super_resolve` N-channel ESRGAN/SwinIR (`prompt.txt:88`) |
+| FR-06 | Uncertainty estimate | Tile + T stochastic passes | HÃ—W heatmap (0-1) | MC-Dropout T=10 std or 3-model ensemble variance |
+| FR-07 | Stitch | Tiles + weights + new affine | H'Ã—W'Ã—C SR array + new affine `Affine.scale(w/new_w,...)` (`kepler/pipeline.py:87-89`) | CRS unchanged, pixel size Ã·3 |
+| FR-08 | Compute metrics | SR vs reference (if paired) or vs input stats | PSNR, SSIM, LPIPS, SAM, ERGAS, NDVI-delta JSON | SAM via `arccos(dot)` per pixel |
+| FR-09 | Export | SR array + transform/CRS | COG GeoTIFF + PNG (`kepler/io.py:129-142`) + data URI | Planar `rgb.transpose(2,0,1)` â†’ tifffile with ModelPixelScale/ Tiepoint / GeoKeyDirectory |
+| FR-10 | Serve results | job_id | `/{input,sr,colorized}` data URI + `/api/download/<file>` + meta (sizes, CRS, elapsed) (`Kepler-404/README.md:178-197`) | Data URI avoids Vercel /tmp cross-instance (`kepler/pipeline.py:190-193`) |
+| FR-11 | Viewer interaction | Upload drag-drop/sample | 4-layer comparison slider (input/SR/heatmap/diff) + stats + download buttons | Mirror `Kepler-404` 3-way but add 4th heatmap |
+| FR-12 | Admin purge | Cron on start | Delete `uploads/`+`results/` >24h | `purge_stale()` (`Kepler-404/README.md:293`) |
+
+### 4. Use Case Flows
+
+**UC-01 Upload â†’ SR**
+1. User drops `sentinel_10m.tif` â†’ `POST /api/infer` multipart (`Kepler-404/README.md:167`).
+2. Pipeline `run()` â†’ `read_geotiff` â†’ tiles â†’ SR â†’ stitch â†’ metrics â†’ write outputs â†’ return JSON.
+3. Frontend renders 4 layers, shows metrics, enables download.
+
+**UC-02 Validation (paired synthetic)**
+1. System loads synthetic pair (synthetic_10m, true_0.5m downsampled to 3.3m) â†’ computes FR-08 â†’ displays delta table.
+
+### 5. Business Rules (Functional)
+
+* Must not strip NIR â€” evaluator NDVI test (`prompt.txt:68`).
+* Must auto-detect band count â€” 8-band on-spot must not crash (`prompt.txt:98`).
+* Seam error <1 DN RMS at tile borders.
+
+### 6. Non-Functional (Cross-ref SRS)
+
+* Latency â‰¤30s CPU for 1024Ã—1024 4-band; throughput 1 job concurrent.
+* Error handling: `DecodingError`/`ProcessingError` map to 400/500 (`kepler/pipeline.py:59-63`).
+
+### 7. Traceability
+
+| FR | PRD | Prompt |
+|---|---|---|
+| FR-05 | PR-03, PR-04 | `prompt.txt:47-52` Expected Solution |
+| FR-06 | PR-05 | `prompt.txt:42` Innovation Injection |
+| FR-08 | PR-06 | `prompt.txt:64-66` Evaluator Perspective |
+# SRS â€” Software Requirements Specification (IEEE 830)
+## SIH26142 Sentinel-SRM v1.0
+
+### 1. Introduction
+**Purpose:** Specify software for NTRO SRM to be built from Kepler-404 fork. **Scope:** Web service + ML pipeline + viewer. **Definitions:** SR=Super-Resolution, SAM=Spectral Angle Mapper, COG=Cloud Optimized GeoTIFF, TIR=Thermal Infrared (legacy).
+
+### 2. Overall Description
+* **Product Perspective:** Fork of `Kepler-404/app.py` thin launcher (`app.py:9-15`) + `kepler/` package. Extends TIR 200â†’100m single-channel to Sentinel-2 10â†’<4m N-channel.
+* **User Classes:** Analyst, Evaluator, Developer (as FRD Â§2).
+* **Constraints:** Plan mode â†’ build mode transition, max 50MB upload (`Kepler-404/README.md:281`), Python 3.9+, Flask debug auto-reload (`README.md:161`).
+
+### 3. Specific Requirements
+
+#### 3.1 Functional (Ref FRD)
+
+* **F-SRS-01:** System shall accept `multipart/form-data` `file` `.tif/.tiff/.png/.jpg` (max 50MB) at `POST /api/infer` and return JSON with `success, images{input,sr,heatmap}, download, download_tif, meta{job_id,input_size,output_size,crs,elapsed,file_type}` extending `Kepler-404/README.md:178-197` to include `heatmap`.
+* **F-SRS-02:** System shall preserve CRS/transform: read via TIFF tags 33550/33922/34264/34735 (`kepler/io.py:24-52`), write via `33550,33922,34735` (`kepler/io.py:104-142`), scaling via `Affine.scale` (`kepler/pipeline.py:87-89`).
+* **F-SRS-03:** System shall auto-detect band count (1,3,4,8) and route through N-channel model without config change.
+
+#### 3.2 External Interfaces
+
+* **API:** `POST /api/infer`, `GET /api/download/<filename>` (`Kepler-404/README.md:210-218`) with CORS (`flask-cors`).
+* **UI:** `templates/index.html` + `static/css|js` â€” drag-drop, progress via actual response, 4-way slider, toast.
+
+#### 3.3 Performance
+
+| Metric | Requirement | Rationale |
+|---|---|---|
+| Latency (1024Ã—1024Ã—4 CPU) | â‰¤30s end-to-end | Demo usability |
+| Throughput | 1 concurrent job, queue second | Prevent OOM |
+| Availability | Purge 24h, stateless pipeline | `Kepler-404/README.md:293` |
+
+#### 3.4 Design Constraints
+
+* Language Python 3.9+, Framework Flask, Libs Rasterio/GDAL optional but preferred for CRS robustness over tifffile-only.
+* Model weights under `weights/` dir, lazy load via config.
+
+#### 3.5 Software System Attributes
+
+* **Reliability:** Wrap unexpected exc â†’ `ProcessingError` 500 (`kepler/pipeline.py:61-63`).
+* **Usability:** Keyboard navigable, ARIA, `prefers-reduced-motion` (`Kepler-404/README.md:50`).
+* **Security:** No persistence of user data beyond 24h, data URI not file path leak.
+* **Portability:** Docker + `vercel.json` (`Kepler-404/vercel.json`) for cloud and on-prem.
+
+#### 3.6 Validation Metrics (SRS-Level)
+
+* PSNR/SSIM/LPIPS per `scikit-image`/`lpips`, SAM `arccos`, ERGAS, NDVI ` (NIR-Red)/(NIR+Red)` delta.
+* Geospatial RMSE <0.3px via affine tiepoint check.
+
+### 4. Appendix: Verbal Traceability
+
+* `prompt.txt:47-52` Expected Solution â†’ F-SRS-01/02/03
+* `prompt.txt:62-66` PSNR/SSIM/SAM + NDVI â†’ Â§3.6
+# TRD â€” Technical Requirements Document
+## SIH26142 Sentinel-SRM
+
+### 1. Purpose
+Defines technical constraints and requirements the implementation must satisfy. Extends `prompt.txt:16-27` and `Kepler-404` audit.
+
+### 2. Technical Constraints
+
+| ID | Constraint | Value / Rule | Source |
+|---|---|---|---|
+| TR-C01 | Max upload | 50 MB per file, else 400 | `Kepler-404/README.md:281` |
+| TR-C02 | Accepted formats | `.tif/.tiff` (GeoTIFF), `.png/.jpg` (image, no CRS) | `Kepler-404/README.md:282` |
+| TR-C03 | Upscale factor | 3Ã— (10mâ†’3.33m) meets `<4m` spec | `prompt.txt:47` |
+| TR-C04 | File retention | 24h auto-purge on server start | `Kepler-404/README.md:284` |
+| TR-C05 | Port | 5000 (configurable via `Settings.host/port`) | `kepler/config.py` |
+| TR-C06 | Python | 3.9+ (`Kepler-404/README.md:120`) | â€” |
+| TR-C07 | Tiling | 256Ã—256 +16 overlap for GB scenes | `prompt.txt:115` |
+
+### 3. Technology Stack
+
+| Component | Choice | Justification |
+|---|---|---|
+| Backend | Flask + Flask-CORS (`requirements.txt:1-2`) | Kepler parity, SIH demo simple |
+| Geospatial | Rasterio + GDAL + Affine + tifffile | Rasterio windowed read > tifffile for large files |
+| Image | opencv-headless, numpy, pillow | Existing + fast |
+| ML | PyTorch + ESRGAN/SwinIR (Real-ESRGAN weights) + scikit-image + lpips | `prompt.txt:22` PyTorch + `Kepler-404/README.md:85` target |
+| Frontend | Vanilla JS + Leaflet + GeoTIFF.js + CSS custom properties | Glassmorphism `Kepler-404/README.md:43` |
+| Infra | Docker, Vercel (`vercel.json`), Gunicorn prod | Cloud + on-prem |
+
+### 4. Hardware Requirements
+
+* **Training:** CUDA GPU 16GB (A100/T4) via Colab Pro/AWS (`prompt.txt:18` High-end GPUs mandatory). 40 GPU-hours for 10k tiles, mixed precision, gradient accumulation.
+* **Inference:** CPU 4-core 8GB RAM min, GPU optional; tiled inference ensures <8GB peak for 1GB input.
+* **Storage:** 100GB for dataset + weights, SSD for tile I/O.
+
+### 5. Software Dependencies
+
+```
+flask, flask-cors, opencv-python-headless, numpy, tifffile, affine
++ rasterio, geopandas, pyproj, scikit-image, lpips, torch, torchvision, albumentations
++ pytest, pillow (dev)
+```
+
+### 6. Data Requirements
+
+* **Primary:** Sentinel-2 L2A via Copernicus Dataspace/GEE (10m B02/B03/B04/B08).
+* **Synthetic Pair Gen:** SpaceNet 0.5m â†’ `cv2.GaussianBlur` + `INTER_AREA` downsample 6Ã— to 3m + simulate Sentinel-2 PSF to 10m (approx). JSON manifest with CRS.
+* **Validation Ref:** PlanetScope 3m or Cartosat 1m (where licensed) for holdout.
+
+### 7. Performance Requirements
+
+* Tile SR <200ms on GPU, <2s on CPU per 256 tile.
+* End-to-end 1024Ã—1024Ã—4: GPU â‰¤10s, CPU â‰¤30s.
+* Seam RMSE <1 DN.
+
+### 8. Security & Compliance
+
+* No auth for SIH demo; CORS enabled globally (`kepler/app.py`).
+* Input validation: `is_geotiff()` by extension + TIFF magic, `DecodingError` â†’ 400.
+* No user data persistence beyond 24h; data URI avoids path traversal.
+
+### 9. Scalability & Reliability
+
+* Stateless `Pipeline` class (`kepler/pipeline.py:32-35`) â€” horizontal scale via container replicas, shared `/tmp` not needed (data URI).
+* Purge on start, not cron â€” SIH demo safe.
+
+### 10. Integration Points
+
+* QGIS/ArcGIS via COG; Bhuvan STAC future.
+* SIH upload portal â†’ PDF export (6 slides) `SIH2024_IDEA_Presentation_Format.pptx:Slide7` rules.
+
+### 11. Open Technical Decisions
+
+* 4-band vs 13-band MVP defaults to 4-band; 1Ã—1 conv makes future trivial.
+* SwinIR vs Real-ESRGAN â€” both supported via factory.
+# DRD â€” Design Requirements Document
+## SIH26142 Sentinel-SRM Viewer & System Design
+
+### 1. Design Goals
+
+* **Mission Control** glassmorphism retains Kepler-404 identity (`Kepler-404/README.md:43`) but adds 4th heatmap layer.
+* **Scientific trust:** Show uncertainty, metrics, CRS truth â€” not just pretty RGB.
+* **SIH compliance:** 2-box side-by-side per `sih py ppt.txt:8-10`.
+
+### 2. Visual Design System (from `sih py ppt.txt:22-36` + `Kepler-404/static/css`)
+
+* **Palette:** `HDR #1F4E79` diamond headers, `GREEN #15803D` subheads, `RED #A32B20` warnings, `CREAM #FFF2CC` flow nodes, `CREAM2 #DEEBF7`, `GREY #F2F2F2` methodology, `BLACK #000000` borders, `WHITE #FFFFFF` boxes.
+* **Typography:** Serif `Times New Roman` titles 23pt, Body `Calibri` 10-11pt, Mono `Consolas` for API/metrics.
+* **Layout:** 13.333Ã—7.5 inches, LB 0.3/RB 6.95 boxes 6.4/6.05W (as `sih py ppt.txt:192-196`).
+
+### 3. UX Requirements
+
+| Requirement | Spec |
+|---|---|
+| Design System | CSS custom properties for light/dark themes, `localStorage` persist (`Kepler-404/README.md:43`) |
+| Cursor | Dot+lerp outline, disabled on touch |
+| Hero | Particle network canvas + mouse repulsion |
+| Upload | Drag-drop + browse + sample chips (Urban/Ocean/Volcanic/Desert as `kepler-404.vercel.app`), 50MB limit, progress via actual response |
+| Comparison | 4-way slider: drag handles reveal Input(10m) / SR(<4m) / Heatmap / Diff; keyboard accessible (`Kepler-404/README.md:43`) |
+| Telemetry | Live job ID, input/output dims, CRS EPSG, elapsed (`Kepler-404/README.md:47` JobMeta) |
+| Export | One-click PNG + COG GeoTIFF download |
+| Accessibility | ARIA, keyboard nav, `prefers-reduced-motion` (`Kepler-404/README.md:50`) |
+| Responsive | Fluid desktop/tablet/mobile, slide-in nav drawer + ESC close |
+
+### 4. Information Architecture
+
+* **Header:** `SIH26142 | Kepler-404 Sentinel-SRM` + nav Pipeline/Demo/FAQ
+* **Pipeline Section:** 4 nodes (Ingest â†’ SR â†’ Uncertainty â†’ Export) as `Kepler-404/README.md:56-63` but N-channel variant.
+* **Demo Section:** Upload card â†’ results grid (3 PNG previews base64) â†’ metrics card â†’ download row.
+* **FAQ:** Adapt `kepler-404.vercel.app/FAQ` â€” TIR Qs â†’ Sentinel SAM/NDVI/uncertainty Qs.
+
+### 5. Interaction Design
+
+* Upload â†’ `POST /api/infer` â†’ loader (mock 2.5s removed prod `Kepler-404/README.md:287`) â†’ render data URIs + metrics.
+* Slider: pointer + keyboard, `pointerEvents` + `keydown` ArrowLeft/Right.
+* Toast: auto-dismiss success/error, offline fallback preview mode.
+
+### 6. Component Spec
+
+| Component | Behavior | Visual |
+|---|---|---|
+| `compare-slider` | 3 handles, `clip-path` per layer | Handles `HDR` dot, track `GREY` |
+| `metrics-card` | Table PSNR/SSIM/SAM/ERGAS | Mono font, GREEN header |
+| `heatmap-legend` | 0-1 gradient viridis | Legend bar + % ticks |
+| `download-row` | Two buttons | Primary `HDR` PNG, secondary `GREEN` TIF |
+
+### 7. Design Validation
+
+* Purge stale visuals still viewable until reload.
+* Empty state: show sample scene thumbnails.
+* Error state: `DecodingError` â†’ toast "Invalid file format" (`Kepler-404/README.md:204`).
+
+### 8. Deliverables
+
+* Figma/HTML `templates/index.html`, `static/css/style.css`, `static/js/script.js` â€” update 4th layer + metrics card.
+* Image prompts for PPT flowcharts (as PRD Â§7).
+# TDD â€” Technical Design Document
+## SIH26142 Sentinel-SRM Implementation Plan
+
+### 1. Overview
+Explains **how** the system will be implemented as fork of Kepler-404 to meet FRD/SRS.
+
+### 2. System Context
+
+* **External:** Copernicus Dataspace / GEE (input), SpaceNet (training), QGIS/ArcGIS (consumer), SIH portal (PDF).
+* **Internal:** Flask app (`kepler/app.py`), Pipeline (`kepler/pipeline.py`), Transforms (`kepler/transforms.py`), IO (`kepler/io.py`).
+
+### 3. Architecture (Technical)
+
+```
+User Browser (Vanilla JS+Leaflet)
+   | POST /api/infer (multipart)
+   v
+Flask create_app() [kepler/app.py] â”€â”€ Settings(host/port/debug)
+   | Pipeline.run(path, job_id) [kepler/pipeline.py:42]
+   â”œâ”€ read_geotiff() / read_image() [kepler/io.py:55-82]
+   â”œâ”€ normalize_to_uint8() per-band [kepler/io.py:85-96]
+   â”œâ”€ TileManager (new) â†’ 256Ã—256+16 tiles, weights
+   â”œâ”€ super_resolve() N-ch ESRGAN/SwinIR [kepler/transforms.py:34] Ã— tiles â†’ stitch
+   â”œâ”€ uncertainty() MC-Dropout (new)
+   â”œâ”€ metrics() SAM/PSNR (new)
+   â”œâ”€ write_geotiff() COG [kepler/io.py:129-142] + write_png()
+   â””â”€ return InferenceResult â†’ data URI [kepler/pipeline.py:190-193]
+```
+
+### 4. Component Design
+
+| Component | Responsibility | Key File | New/Modified |
+|---|---|---|---|
+| `Config` | Env, dirs, is_geotiff() | `kepler/config.py` | Add `tile_size=256, overlap=16, scale=3, device=cuda/cpu` |
+| `IO` | Multi-band read/write, CRS extract | `kepler/io.py` | Modify: keep all bands, not `raw[:,:,0]` |
+| `Transforms` | SR + uncertainty | `kepler/transforms.py` | Modify: N-channel + factory |
+| `Patch` | Tiling/stitching | `kepler/patch.py` *(new)* | New |
+| `Metrics` | PSNR/SSIM/SAM/ERGAS/NDVI | `kepler/metrics.py` *(new)* | New |
+| `Dataset` | Synthetic pair gen | `kepler/datasets.py` *(new)* | New |
+| `Pipeline` | Orchestration | `kepler/pipeline.py` | Modify: branch tiles |
+| `Routes` | API | `kepler/routes.py` | Modify: add heatmap to JSON, extend meta |
+
+### 5. Data Flow
+
+1. **Ingest:** `TiffFile` â†’ `GeoReadResult{band:NÃ—HÃ—W, transform, crs, w,h}` (extend from 2D to NÃ—HÃ—W).
+2. **Normalize:** per-band percentile clip â†’ uint8.
+3. **Tile:** `unfold` with overlap, store coords, Gaussian weight map `exp(-dÂ²/2ÏƒÂ²)`.
+4. **SR:** Each tile `1Ã—NÃ—256Ã—256 â†’ 1Ã—NÃ—768Ã—768` via model; MC passes T=10 â†’ mean+std.
+5. **Stitch:** Accumulate weighted sum / weight sum, compute new affine `transform * Affine.scale(w/new_w, h/new_h)`.
+6. **Export:** `tifffile.imwrite` planar `CÃ—HÃ—W`, tags 33550/33922/34735.
+
+### 6. Technology Choices
+
+* **Rasterio vs tifffile:** Keep tifffile for lightweight read but add Rasterio windowed read for >50MB fallback (GDAL handles large COG better).
+* **Model:** Real-ESRGAN pretrained on RGB â†’ replace first conv `3â†’64` with `Nâ†’64` (copy RGB weights, init NIR avg of RGB). SwinIR alternative via `timm`.
+* **Uncertainty:** Option A MC-Dropout (dropout p=0.1 at SR tail, T=10, std) ; Option B 3-model ensemble. Choose A for SIH (single weights).
+
+### 7. Deployment Design
+
+* **Dev:** `python app.py` debug True auto-reload (`Kepler-404/README.md:161`).
+* **Prod:** `gunicorn kepler.app:create_app()` + Docker `python:3.9-slim` + GDAL apt, `vercel.json` for demo, on-prem systemd for NTRO.
+* **CI:** `pytest` (`Kepler-404/.pytest_cache`) + `tests/test_io_roundtrip`, `test_patch_stitch`.
+
+### 8. Migration from TIR
+
+* Flag `MODE=tir|sentinel` in `Settings`; TIR uses single-channel Inferno, Sentinel uses N-channel + SAM.
+* Preserve API shape: `images {input,sr,heatmap}` (rename `colorizedâ†’heatmap` for sentinel, backwards compat via alias).
+
+### 9. Risks & Mitigations (Technical)
+
+* OOM on 5000Ã—5000Ã—4 â†’ tiled + stream write via `tifffile` memmap.
+* Channel mismatch â†’ factory checks `in_ch` from input vs `model.in_ch` â†’ error 400 with hint.
+* Hallucination â†’ uncertainty threshold >0.6 flagged red in viewer.
+
+### 10. Testing Strategy
+
+* Unit: `read_geotiff` roundtrip CRS, `super_resolve` shape, `patch` seam RMSE.
+* Integration: `Pipeline.run` on `sample.tiff` + synthetic 4-band, check JSON contract.
+* Validation: Holdout synthetic 100 tiles â†’ metrics table target Â§PRD-8.
+
+# SDD â€” Software Design Document
+## SIH26142 Sentinel-SRM Detailed Software Architecture
+
+### 1. Introduction
+Detailed architecture for Sentinel-SRM, companion to TDD/HLD.
+
+### 2. System Overview
+
+* **Type:** Web service + batch ML pipeline.
+* **Deployment:** Single container, stateless, 24h ephemeral storage.
+
+### 3. Module Breakdown
+
+```
+Kepler-404/
+â”œâ”€â”€ app.py (thin launcher, unchanged)
+â”œâ”€â”€ kepler/
+â”‚   â”œâ”€â”€ app.py (create_app, CORS, purge_stale)
+â”‚   â”œâ”€â”€ config.py (Settings dataclass, ensure_dirs, is_geotiff, new: tile/scale/device)
+â”‚   â”œâ”€â”€ exceptions.py (DecodingError, ProcessingError)
+â”‚   â”œâ”€â”€ logging_setup.py (get_logger)
+â”‚   â”œâ”€â”€ io.py (GeoReadResult, read/write, normalize) â† modified N-band
+â”‚   â”œâ”€â”€ transforms.py (super_resolve, uncertainty) â† modified N-ch
+â”‚   â”œâ”€â”€ patch.py (TileManager, blend) â† new
+â”‚   â”œâ”€â”€ metrics.py (sam, psnr, ssim, ergas, ndvi) â† new
+â”‚   â”œâ”€â”€ datasets.py (synthetic degradation) â† new
+â”‚   â”œâ”€â”€ models.py (FileType, ImageSet, InferenceResult, JobMeta) â† extended heatmap
+â”‚   â”œâ”€â”€ pipeline.py (Pipeline, _process_geotiff/_image, _shared_stages) â† tiling
+â”‚   â””â”€â”€ routes.py (api infer/download) â† +heatmap field
+â”œâ”€â”€ templates/index.html
+â”œâ”€â”€ static/{css,js}
+â”œâ”€â”€ weights/{real_esrgan_4ch.pth, swinir_4ch.pth}
+â”œâ”€â”€ uploads/ results/ (ephemeral)
+â””â”€â”€ tests/
+```
+
+### 4. Data Model
+
+#### 4.1 GeoReadResult (modified)
+
+```python
+@dataclass
+class GeoReadResult:
+    band: np.ndarray  # NÃ—HÃ—W or HÃ—WÃ—C, float32/DN preserved â†’ uint8 via normalize per-band
+    transform: Affine
+    crs: object  # "EPSG:32643"
+    width: int; height: int; count: int  # new: band count
+```
+
+#### 4.2 InferenceResult (extended)
+
+```python
+@dataclass
+class InferenceResult:
+    job_id: str
+    images: ImageSet  # input, sr, heatmap (renamed from colorized)
+    download_png: str; download_tif: str|None
+    meta: JobMeta
+    metrics: dict|None  # {psnr, ssim, sam_mean, ergas, ndvi_delta}
+```
+
+#### 4.3 JobMeta
+
+```
+job_id, input_size "HÃ—WÃ—C", output_size "H'Ã—W'Ã—C", crs, elapsed, file_type (GEOTIFF/IMAGE)
+```
+
+### 5. Component Interaction (Sequence)
+
+```
+Client -> Routes /api/infer: multipart file
+Routes -> Pipeline.run(path, job_id): is_geo?
+Pipeline -> IO.read_geotiff: NÃ—HÃ—W + transform
+Pipeline -> IO.normalize_to_uint8 per-band
+Pipeline -> Patch.tile(): list[Tile(coords, data, weight)]
+Pipeline -> Transforms.super_resolve() per tile (batched if GPU)
+Pipeline -> Patch.stitch(): H'Ã—W'Ã—C + new_transform
+Pipeline -> Transforms.uncertainty() -> heatmap H'Ã—W'
+Pipeline -> Metrics.compute() if reference
+Pipeline -> IO.write_geotiff() + write_png() Ã—3 + heatmap PNG
+Pipeline -> Result.to_dict() -> JSON response with data URIs
+```
+
+### 6. Algorithm Design
+
+#### 6.1 Super Resolution
+
+* **Model:** Real-ESRGAN Generator (RRDB) with `in_nc=N, out_nc=N, nf=64, nb=23`, upscale 3Ã— via `Ã—3 PixelShuffle` or 2Ã—+1.5 resize.
+* **Adaptation:** First conv weight `conv_first.weight: [64,N,3,3]` â€” initRGB copied, NIR channel init = mean(R,G,B).
+* **Forward:** `T = normalize(tile/255) â†’ model(T) â†’ clip 0-1 â†’ uint8`.
+
+#### 6.2 Loss (Training)
+
+```
+Loss = L1 + 0.1Â·Perceptual(VGG19) + 0.05Â·SAM
+SAM = mean(arccos( dot(pred,gt) / (|pred||gt|) ))
+Perceptual = L1(VGG features)
+```
+Physics bonus: optional NDVI consistency `|NDVI_sr - NDVI_gt|`.
+
+#### 6.3 Tiling & Blending
+
+* Tile 256, overlap 16, stride 240. Weight map 2D Gaussian Ïƒ=overlap/2.
+* Accumulator `acc[C,H',W']`, weight_sum `[H',W']`. Stitch `acc / weight_sum`.
+
+#### 6.4 Uncertainty
+
+* MC-Dropout: enable dropout in tail (p=0.2), T=10 passes â†’ `mean, std`. Heatmap `std_norm = (std - min)/(max-min)` viridis colormap.
+* Threshold 0.6 std â†’ red overlay warning.
+
+#### 6.5 Metrics
+
+* PSNR `10Â·log10(255Â²/MSE)`, SSIM `skimage`, LPIPS `lpips.VGG`, SAM per pixel mean, ERGAS `100Â·(h/l)Â·sqrt(mean((RMSE/B)Â²))`, NDVI `(NIR-Red)/(NIR+Red)` delta.
+
+### 7. Database / Storage
+
+* No DB â€” filesystem `uploads/` + `static/results/` purged 24h. Future: SQLite job log if needed.
+
+### 8. Error Handling
+
+| Exception | HTTP | Message |
+|---|---|---|
+| `DecodingError` | 400 | "Could not read GeoTIFF {name}: {exc}" |
+| `ProcessingError` (OOM) | 500 | "Pipeline failure: ..." with log id |
+| Channel mismatch | 400 | "Model expects 4ch, got 8ch â€” use ... " |
+
+### 9. Configuration
+
+```python
+@dataclass
+class Settings:
+    host="0.0.0.0"; port=5000; debug=True
+    upload_dir="uploads"; results_dir="static/results"
+    max_bytes=50*1024*1024; mock_delay_seconds=0.0
+    tile_size=256; overlap=16; scale=3; device="cuda:0" if torch.cuda.is_available() else "cpu"
+    model_name="real_esrgan_4ch"; dropout_p=0.2; mc_passes=10
+```
+
+### 10. Testing & QA
+
+* `tests/test_io.py`: N-band roundtrip CRS+transform preservation.
+* `tests/test_patch.py`: Seam RMSE <1 DN on synthetic checkerboard.
+* `tests/test_transforms.py`: N=4,8 shape correct, uncertainty range 0-1.
+* `tests/test_pipeline_e2e.py`: full run on `sample.tiff` (1-band) + synthetic 4-band, JSON contract.
+
+# HLD â€” High-Level Design
+## SIH26142 Sentinel-SRM Overall System Architecture
+
+### 1. Purpose
+Overall system architecture, external view for evaluators and NTRO deployment.
+
+### 2. System Context Diagram
+
+```
+                â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+                â”‚  Copernicus / GEE   â”‚
+                â”‚  Sentinel-2 L2A 10m â”‚
+                â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                          â”‚ 10m 4-band GeoTIFF
+                          v
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”    â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  Analyst â”‚â”€â”€â”€â–¶â”‚  Sentinel-SRM Web    â”‚â”€â”€â”€â–¶â”‚  QGIS/ArcGIS â”‚â”€â”€â”€â–¶â”‚  NTRO   â”‚
+â”‚  Browser â”‚â—€â”€â”€â”€â”‚  Service (Flask)     â”‚    â”‚  COG Viewer  â”‚    â”‚ Decisionâ”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜    â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                    â”‚           â”‚
+                    â”‚           â””â”€â–¶ metrics/log
+                    â””â”€â–¶ weights/ (ESRGAN/SwinIR)
+```
+
+### 3. High-Level Components
+
+| Component | Responsibility | Tech |
+|---|---|---|
+| **Web UI** | Upload, 4-layer viewer, download | Vanilla JS + Leaflet + GeoTIFF.js, glassmorphism `Kepler-404/README.md:43` |
+| **API Gateway** | `POST /api/infer`, `GET /api/download`, CORS, validation | Flask `kepler/app.py` |
+| **Pipeline Orchestrator** | Single entry `Pipeline.run()` | `kepler/pipeline.py:42` |
+| **Geospatial I/O** | CRS/transform preserve, N-band read/write | Rasterio/tifffile + Affine |
+| **ML Engine** | N-ch SR + uncertainty | PyTorch ESRGAN/SwinIR on GPU/CPU |
+| **Tiling Service** | Split/stitch GB scenes | `kepler/patch.py` |
+| **Metrics Service** | PSNR/SSIM/SAM/ERGAS/NDVI | `kepler/metrics.py` â†’ scikit-image |
+| **Storage** | Ephemeral 24h | `uploads/`, `static/results/` |
+| **Dataset Builder** | Offline synthetic pairs | `kepler/datasets.py` + SpaceNet |
+
+### 4. Deployment Architecture
+
+```
+[Browser] â”€â”€HTTPâ”€â”€> [Flask Gunicorn :5000 Docker]
+                        â”‚
+                        â”œâ”€ /tmp/kepler/uploads (emptyDir)
+                        â”œâ”€ /tmp/kepler/results (emptyDir) 24h
+                        â”œâ”€ /app/weights/*.pth (readOnly)
+                        â””â”€ GPU optional (nvidia-docker)
+[Vercel Edge] for demo mirror (data URI avoids /tmp cross-instance [kepler/pipeline.py:190])
+[On-Prem NTRO] same image, air-gapped, no Vercel
+```
+
+### 5. External Interfaces
+
+| Interface | Protocol | Format | Spec |
+|---|---|---|---|
+| `POST /api/infer` | HTTP multipart | GeoTIFF | `Kepler-404/README.md:167` + heatmap extension |
+| `GET /api/download/<f>` | HTTP | Binary | `Content-Disposition: attachment` |
+| COG output | File | GeoTIFF tags 33550/33922/34735 | `kepler/io.py:104-142` |
+| SIH Portal | PDF upload | 6 slides | `SIH2024_IDEA_Presentation_Format.pptx:Slide7` |
+
+### 6. Data Flow (High Level)
+
+```
+Input 10m NÃ—HÃ—W â”€â”€normalizeâ”€â”€> Tiled 256 â”€â”€SR 3Ã—â”€â”€> Tiled 768 â”€â”€stitch+blendâ”€â”€> SR NÃ—H'Ã—W' + Heatmap â”€â”€metricsâ”€â”€> JSON+COG
+```
+
+### 7. Non-Functional (HLD)
+
+* **Stateless:** No session, job_id UUID hex (`kepler/pipeline.py:45`).
+* **Scalability:** Horizontal replicas; tiling keeps per-job RAM <8GB.
+* **Reliability:** Wrap exc â†’ 500, log with short_id 8 chars (`kepler/pipeline.py:48`).
+* **Security:** 50MB limit, extension check, no exec.
+
+### 8. Technology Roadmap
+
+* HLD v1: 4-band MVP 3Ã— (SIH).
+* HLD v2: 13-band + STAC catalog + Bhuvan.
+* HLD v3: Multi-temporal fusion + diffusion SR.
+
+### 9. Diagram Prompt (for PPT Slide 3 Right Box)
+
+*As PRD Slide 3 prompt â€” generate HLD block diagram with 3 tiers (Ingest/Tile, ML Core N-ch, Export/Metrics) using colors #F7FBFF, #FFF2CC, #EDEBF8.*
+
+# LLD â€” Low-Level Design
+## SIH26142 Sentinel-SRM Detailed Classes, APIs, DB Schemas, Algorithms
+
+### 1. Class Diagram (Key Classes)
+
+```
+Settings â”€â”€1â”€â”€> Pipeline â”€â”€usesâ”€â”€> TileManager, SRModel, Metrics, IO
+Pipeline â”€â”€createsâ”€â”€> InferenceResult â”€â”€containsâ”€â”€> ImageSet, JobMeta
+IO: GeoReadResult, read_geotiff, write_geotiff, normalize_to_uint8
+Transforms: super_resolve(), uncertainty()
+```
+
+### 2. Class Details
+
+#### 2.1 `Settings` (`kepler/config.py`)
+
+```python
+@dataclass
+class Settings:
+    host: str = "0.0.0.0"
+    port: int = 5000
+    debug: bool = True
+    upload_dir: Path = Path("uploads")
+    results_dir: Path = Path("static/results")
+    max_bytes: int = 50*1024*1024
+    mock_delay_seconds: float = 0.0
+    tile_size: int = 256
+    overlap: int = 16
+    scale: int = 3  # 10mâ†’3.33m
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    model_name: str = "real_esrgan_4ch"
+    dropout_p: float = 0.2
+    mc_passes: int = 10
+    def ensure_dirs(self): ...
+    def is_geotiff(self, name: str) -> bool: return name.lower().endswith((".tif",".tiff"))
+```
+
+#### 2.2 `GeoReadResult` (`kepler/io.py`)
+
+* See SDD Â§4.1 â€” add `count:int` and change `band: np.ndarray` shape `CÃ—HÃ—W` (if tifffile planar) or `HÃ—WÃ—C` normalized to `CÃ—HÃ—W` internally.
+
+#### 2.3 `TileManager` (`kepler/patch.py` new)
+
+```python
+@dataclass
+class Tile:
+    data: np.ndarray  # CÃ—256Ã—256 uint8
+    coords: tuple[int,int]  # (x,y) in input
+    weight: np.ndarray  # 256Ã—256 float Gaussian
+
+class TileManager:
+    def __init__(self, tile_size=256, overlap=16): ...
+    def tile(self, img: np.ndarray) -> list[Tile]:  # img CÃ—HÃ—W
+        # stride = tile_size-overlap, create weight map exp(-dÂ²/(2*(overlap/2)Â²))
+    def stitch(self, tiles: list[np.ndarray], out_h, out_w, weight_map) -> np.ndarray:
+        # acc + weight_sum, divide, return CÃ—H'Ã—W'
+```
+
+#### 2.4 `SRModel` (`kepler/transforms.py` modified)
+
+```python
+class SRModel:
+    def __init__(self, in_ch: int, out_ch: int, scale=3, arch="real_esrgan"):
+        self.model = RRDBNet(in_nc=in_ch, out_nc=out_ch, nf=64, nb=23, scale=scale)
+        # load state_dict, replace first conv if channel mismatch: init new channel = mean old
+        self.model.eval().to(device)
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:  # x: 1Ã—CÃ—HÃ—W float 0-1
+        with torch.no_grad():
+            return self.model(x).clamp(0,1)
+
+# functional wrapper for Pipeline backward compat
+def super_resolve(img: np.ndarray, model: SRModel) -> np.ndarray: ...
+def uncertainty(img: np.ndarray, model: SRModel, T=10) -> np.ndarray:  # HÃ—W std 0-255
+```
+
+#### 2.5 `Pipeline` (`kepler/pipeline.py` modifications)
+
+```python
+class Pipeline:
+    def __init__(self, settings: Settings):
+        self.settings=settings; self.settings.ensure_dirs()
+        self.sr_model = SRModel(in_ch=4, out_ch=4)  # lazy per first call channel
+        self.tile_mgr = TileManager(settings.tile_size, settings.overlap)
+    def run(self, input_path: Path, job_id:str|None=None) -> InferenceResult:
+        # is_geo branch, now tiling loop:
+        # gray = normalize -> tiles = tile_mgr.tile(gray)
+        # sr_tiles = [super_resolve(t.data) for t in tiles]
+        # sr_gray = tile_mgr.stitch(sr_tiles, new_h, new_w)
+        # heatmap = uncertainty(gray)
+        # metrics = Metrics.compute(sr_gray, ref) if ref else {}
+        # write_png/write_geotiff (N-band planar)
+```
+
+### 3. API Contracts (Low Level)
+
+#### 3.1 `POST /api/infer`
+
+**Request:** `Content-Type: multipart/form-data; boundary=...`
+```
+file: <binary> name="sentinel_10m.tif"
+```
+Validation: `if file.content_length > settings.max_bytes: 413` ; `if not is_geotiff and not image: 415`.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "images": {
+    "input": "data:image/png;base64,iVBOR...",
+    "sr": "data:image/png;base64,iVBOR...",
+    "heatmap": "data:image/png;base64,iVBOR..."
+  },
+  "download": "/api/download/abc123_colorized.png",
+  "download_tif": "/api/download/abc123_sr.tif",
+  "download_heatmap": "/api/download/abc123_heatmap.tif",
+  "meta": {
+    "job_id": "abc123...",
+    "input_size": "1024Ã—1024Ã—4",
+    "output_size": "3072Ã—3072Ã—4",
+    "crs": "EPSG:32643",
+    "elapsed": "12.3",
+    "file_type": "GeoTIFF"
+  },
+  "metrics": {
+    "psnr": 29.2, "ssim": 0.84, "sam_mean_deg": 2.1, "ergas": 2.0, "ndvi_delta": 0.01
+  }
+}
+```
+**Error 400:**
+```json
+{"success": false, "error": "Invalid file format. Please upload a .tif, .tiff, .png, .jpg, or .jpeg file."}
+```
+
+#### 3.2 `GET /api/download/<filename>`
+
+* Header `Content-Disposition: attachment; filename="<filename>"`
+* Lookup under `results_dir`, 404 if missing/purged.
+
+### 4. DB Schemas
+
+* **No DB for MVP.** Filesystem only. Optional future `jobs` SQLite:
+```sql
+CREATE TABLE jobs (
+  job_id TEXT PRIMARY KEY,
+  input_name TEXT,
+  crs TEXT,
+  input_size TEXT,
+  output_size TEXT,
+  elapsed REAL,
+  psnr REAL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 5. Algorithm Pseudocode
+
+#### 5.1 Synthetic Degradation (`kepler/datasets.py`)
+
+```python
+def degrade(hr_path: Path, out_lr: Path, scale=3):
+    hr = rasterio.open(hr_path).read()  # CÃ—HÃ—W 0.5m
+    # Gaussian PSF sigma ~0.8, then downsample via INTER_AREA
+    lr = cv2.GaussianBlur(hr.transpose(1,2,0), (7,7), 0.8)
+    lr = cv2.resize(lr, (W//scale, H//scale), interpolation=cv2.INTER_AREA)
+    # Add Sentinel-2-like noise 1% + clip
+    lr = np.clip(lr + np.random.randn(*lr.shape)*2, 0, 255).astype(np.uint8)
+    write_geotiff(out_lr, lr, transform_scaled, crs)
+```
+
+#### 5.2 Per-Band Normalize (`kepler/io.py`)
+
+```python
+def normalize_to_uint8_per_band(arr: np.ndarray) -> np.ndarray:
+    # arr CÃ—HÃ—W float DN
+    out = np.empty((C,H,W), dtype=np.uint8)
+    for c in range(C):
+        band = arr[c]
+        valid = band[np.isfinite(band)]
+        low, high = np.percentile(valid, [2,98])
+        if high<=low: low,high = valid.min(), valid.max()
+        out[c] = np.clip((band-low)/(high-low),0,1)*255
+    return out
+```
+
+#### 5.3 SAM Metric (`kepler/metrics.py`)
+
+```python
+def sam(pred: np.ndarray, gt: np.ndarray) -> float:
+    # pred,gt CÃ—HÃ—W uint8 -> float 0-1
+    pred_f = pred.astype(float)/255; gt_f = gt.astype(float)/255
+    dot = np.sum(pred_f*gt_f, axis=0)
+    norm = np.linalg.norm(pred_f,axis=0)*np.linalg.norm(gt_f,axis=0)
+    angle = np.arccos(np.clip(dot/(norm+1e-8), -1,1)) * 180/np.pi
+    return float(np.mean(angle))
+```
+
+### 6. File Structure & Key Paths
+
+* `app.py:9` launcher â†’ `kepler/app.py:create_app` â†’ `kepler/routes.py` â†’ `kepler/pipeline.py:run`.
+* `static/results/<job_id>_input.png` etc. data URI avoids Vercel (`kepler/pipeline.py:190-193`).
+* `weights/real_esrgan_4ch.pth` lazy load on first `super_resolve`.
+
+### 7. Sequence: Tiled SR (LLD)
+
+```
+loop over tiles:
+  tile_tensor = torch.from_numpy(tile.data).float()/255 â†’ 1Ã—CÃ—256Ã—256 .to(device)
+  sr_tile = model(tile_tensor) â†’ 1Ã—CÃ—768Ã—768
+  sr_tile_uint8 = (sr_tile.squeeze().cpu().numpy()*255).astype(uint8)
+  place into acc at coords*scale with weight
+```
+
+### 8. Testing (LLD)
+
+* `tests/test_io_ndim.py`: Assert 4-band read/write roundtrip CRS equal, transform scaled correctly `new_transform = old * Affine.scale(w/new_w, h/new_h)`.
+* `tests/test_patch.py`: Create checkerboard 512Ã—512, tile/stitch, assert RMSE <1.
+* `tests/test_sam.py`: Same image SAM â‰ˆ0Â°, random image SAM >10Â°.
+```
+
+# Development Working Cycle / Flow
+## SIH26142 Sentinel-SRM (Kepler-404 Fork) â€” Agile SDLC for 3-Week SIH Sprint
+
+**Product:** 10m Sentinel-2 â†’ <4m SRM + Uncertainty | **Repo:** `Kepler-404/` fork â†’ `sih26142-sentinel` branch | **Stack:** Flask + Rasterio + PyTorch ESRGAN/SwinIR  
+**Team:** 4 (2 DL + 1 Geospatial + 1 Full-stack) per `prompt.txt:71-81` | **Cycle:** 3 sprints Ã— 1 week, daily 15m standup + weekly SIH mentoring
+
+---
+
+## 1. Overall Development Cycle (End-to-End)
+
+```mermaid
+flowchart LR
+    A[01 PLANNING<br/>PRD/BRD/SRS<br/>2d] --> B[02 DESIGN<br/>DRD/HLD/LLD<br/>2d]
+    B --> C[03 DEV SPRINTS<br/>M1â†’M2â†’M3<br/>14d]
+    C --> D[04 TEST<br/>Pytest + Metrics<br/>2d]
+    D --> E[05 INTEGRATE<br/>E2E Pipeline<br/>1d]
+    E --> F[06 DEPLOY<br/>Docker/Vercel<br/>1d]
+    F --> G[07 DEMO + DOC<br/>6-slide PPT+PDF<br/>2d]
+    G --> H[08 FEEDBACK<br/>NTRO Judge Q&A<br/>1d]
+    H -->|Iterate| A
+```
+
+**Total 3 weeks (21d) maps to `prompt.txt:14` feasible if data download not 24h + SIH deadlines `SIH2026_About_SIH.md:15-24`.**
+
+---
+
+## 2. Phase Breakdown with Deliverables
+
+| Phase | Days | Owner | Input | Output | Exit Criteria |
+|---|---|---|---|---|---|
+| **P1 Planning** | D1-2 | All | PRD `01_PRD.md`, prompt `prompt.txt:45-52` | Backlog + synthetic data plan | PRD approved, SpaceNet download started |
+| **P2 Design** | D3-4 | Geospatial+Full-stack | DRD/TRD | Patch spec 256+16, N-ch model spec, API contract | HLD/LLD reviewed |
+| **M1 Sprint: I/O + Tiling** | D5-7 | Geospatial + DL | `kepler/io.py:55-65` single-band bug | `patch.py` + N-band `io.py` fix + 10k synthetic tiles | Tile stitch RMSE <1 DN, read 4-band ok |
+| **M2 Sprint: Model Train** | D8-14 | 2 DL | Synthetic pairs | Weights `real_esrgan_4ch.pth`, loss `L1+Perceptual+SAM` `prompt.txt:88` | PSNRâ‰¥28 SAM<3Â° on holdout |
+| **M3 Sprint: Viewer + Uncertainty** | D15-17 | Full-stack + DL | M2 weights | 4-layer viewer + heatmap MC T=10 + metrics card | Demo 1024Ã—1024 â‰¤30s CPU |
+| **Test** | D18-19 | All | Pipeline | `pytest` green + NDVI r>0.98 | No regression on `sample.tiff` |
+| **Integrate** | D20 | All | All modules | E2E `POST /api/infer` â†’ COG + JSON | QGIS overlay RMSE <0.3px |
+| **Deploy** | D21 | Full-stack | Docker | Vercel live + on-prem image + PDF | `http://kepler-404-srm.vercel.app` live |
+| **Demo** | D22 | All | Deploy | 6-slide PPT per `sih py ppt.txt:8-36` + speaker script | SIH portal PDF uploaded |
+
+---
+
+## 3. Sprint Working Cycle (Daily Loop)
+
+```mermaid
+flowchart TD
+    S[09:00 Standup 15m<br/>Yesterday/Today/Blocker] --> P[Pull main â†’ create feat/* branch]
+    P --> C[Code + Unit Test<br/>pytest watch]
+    C --> PR[Push + PR + Code Review 1 peer]
+    PR --> CI[CI pytest + lint<br/>fail â†’ fix]
+    CI --> MG[Merge to develop]
+    MG --> D[Daily demo 17:00<br/>run Pipeline on sample.tiff]
+    D --> LOG[Log metrics PSNR/SAM in metrics.md]
+    LOG --> S
+```
+
+**Branching (GitFlow-lite from `Kepler-404/.git`):**
+
+```
+main (protected, deploy) â† develop (integration) â† feat/patch-tiling, feat/nch-sr, feat/uncertainty, feat/metrics
+                           â† hotfix/crs-preserve
+Tags: v0.1-m1, v0.2-m2, v1.0-sih
+```
+
+**PR Rules:** 1 approver, `pytest` must pass (`Kepler-404/.pytest_cache`), no direct push to `main`.
+
+---
+
+## 4. Development Flow per Feature (Example: N-Channel SR)
+
+```mermaid
+flowchart LR
+    A[Read LLD Â§2.4 SRModel spec] --> B[Create kepler/transforms_srm.py<br/>branch feat/nch-sr]
+    B --> C[Write super_resolve N-ch + factory<br/>first conv Nâ†’64 init mean]
+    C --> D[Unit test tests/test_transforms_nch.py<br/>4 & 8 band shape ok]
+    D --> E[Integrate into pipeline.py _shared_stages<br/>replace cv2.resize transforms.py:38]
+    E --> F[E2E test POST /api/infer 4-band tif<br/>check download_tif exists]
+    F --> G[Log PSNR/SAM<br/>commit â†’ PR â†’ merge]
+```
+
+**Parallel Tracks:**
+
+* Geospatial track: `io.py` N-band + `patch.py` + `datasets.py` synthetic
+* DL track: `transforms.py` + `weights/` + `metrics.py`
+* Frontend track: `templates/index.html` 4th layer + `static/js/script.js` slider
+
+Merge at end of M2 via `develop` integration test.
+
+---
+
+## 5. CI/CD Flow
+
+```mermaid
+flowchart LR
+    PUSH[Push to develop] --> GH[GitHub Actions]
+    GH --> LINT[ruff + black check]
+    LINT --> TEST[pytest -k 'not slow'<br/>test_io, test_patch, test_pipeline_e2e]
+    TEST --> BUILD[docker build<br/>python:3.9-slim + gdal]
+    BUILD --> SCAN[trivy scan]
+    SCAN --> VERCEL[vercel deploy --prebuilt<br/>data URI avoids /tmp]
+    VERCEL --> NOTIFY[Slack #sih26142 metrics]
+```
+
+**On `main` tag:** Auto build on-prem image `kepler-srm:1.0` + PDF artifact.
+
+---
+
+## 6. Testing Working Cycle
+
+| Level | When | Tool | Assert |
+|---|---|---|---|
+| Unit | Per commit | `pytest` | `read_geotiff` CRS roundtrip `kepler/io.py:104-142`, `patch` seam RMSE<1 |
+| Integration | Per PR | `pipeline.run(sample.tiff)` | JSON has `heatmap`, `metrics` |
+| Validation | Nightly | `datasets.py` holdout 100 tiles | PSNRâ‰¥28 SAM<3Â° NDVI delta <0.02 |
+| Acceptance | Sprint end | Manual QGIS overlay | RMSE <0.3px, NDVI calculable `prompt.txt:68` |
+| SIH Mock | Before submit | Judge Q&A `prompt.txt:106-115` | Answer bridge/8-band/GB stitch verbally |
+
+---
+
+## 7. Daily / Weekly Cadence
+
+* **Daily 09:00:** Standup board (To Do / In Progress / Review / Done), update `session.txt` (`Kepler-404/session.txt` pattern).
+* **Daily 17:00:** 5-min demo on real Sentinel-2 tile, log elapsed + metrics.
+* **Weekly Friday:** Sprint review + retro, re-estimate via `SIH2026_Difficulty_Levels.md` Medium baseline, mentor sync `SIH2026_About_SIH.md:59`.
+* **Continuous:** Handle `mock_delay_seconds` 0 prod, keep `purge_stale` 24h `Kepler-404/README.md:284`.
+
+---
+
+## 8. Risk-Driven Working Cycle (Feedback Loops)
+
+```mermaid
+flowchart TD
+    RISK[Risk: Hallucination] --> MIT[Mitigation: Uncertainty heatmap]
+    MIT --> TEST[Validate Pearson std vs error >0.6]
+    TEST -->|Fail| RETRAIN[Retrain with higher SAM weight]
+    RETRAIN --> TEST
+    TEST -->|Pass| SHIP[Ship]
+
+    RISK2[Risk: No paired data] --> MIT2[Synthetic degradation]
+    MIT2 --> CHECK[Check synthetic vs real domain gap NIQE]
+    CHECK -->|High gap| ADJUST[Adjust PSF sigma/noise]
+```
+
+---
+
+## 9. Release Cycle to SIH Portal
+
+```
+develop green â†’ PR to main â†’ tag v1.0-sih â†’ GitHub Release with weights (LFS) + PDF (6 slides per SIH2024_IDEA_Presentation_Format.pptx:Slide7 rules) â†’ Export PDF (no PPT) â†’ Upload https://sih.gov.in/sih2026PS â†’ Demo URL kepler-404.vercel.app
+```
+
+**Definition of Done (SIH Internal):**
+
+* [ ] N-band GeoTIFF in â†’ COG out with `Affine.scale` CRS `kepler/pipeline.py:87`
+* [ ] SAM <3Â°, uncertainty Pearson >0.6, pipeline handles 8-band on-spot `prompt.txt:98`
+* [ ] 6-slide PDF + live demo URL + metrics report
+
+---
+
+*This cycle maps 1:1 to TDD Â§10 Testing, SDD Â§10, flow.md Â§3-5 pipelines. Keep cycle tight: 75% code 25% doc per sprint.*
+# FLOW â€” End-to-End System & Data Flows
+## SIH26142 Sentinel-SRM (Kepler-404 Fork) 10m Sentinel-2 â†’ <4m (3Ã—)
+
+**Product:** Sentinel-SRM | **PS:** SIH26142 NTRO Space Technology | **Base:** `Kepler-404/` Flask+Rasterio 200â†’100m â†’ N-channel Sentinel-2
+**Files Ref:** `kepler/pipeline.py:32-91`, `kepler/io.py:55-142`, `kepler/transforms.py:34-45`, `prompt.txt:45-52/88/103/115`
+
+---
+
+## 1. User Journey Flow
+
+```mermaid
+flowchart LR
+    A[Analyst / Evaluator opens kepler-404.vercel.app] --> B{Has 10m GeoTIFF?}
+    B -->|Yes| C[Drag-drop 4-band .tif â‰¤50MB]
+    B -->|No| D[Click sample: Urban / Ocean / Desert]
+    C --> E[POST /api/infer multipart]
+    D --> E
+    E --> F[Loader + job_id short 8 chars]
+    F --> G[4-Layer Viewer: Input 10m | SR 3.3m | Heatmap | Diff]
+    G --> H{Trust heatmap?}
+    H -->|Low uncertainty| I[Download COG GeoTIFF + PNG + Metrics JSON]
+    H -->|High uncertainty| J[Flag red overlay, re-run or discard]
+    I --> K[Open in QGIS/ArcGIS overlay check]
+```
+
+**Key touchpoints:** `templates/index.html` drag-drop, `POST /api/infer` (`Kepler-404/README.md:167`), data URI renders (`kepler/pipeline.py:190-193`) avoids Vercel /tmp, toast on `DecodingError` (`Kepler-404/README.md:204`).
+
+---
+
+## 2. High-Level System Flow (HLD)
+
+```mermaid
+flowchart TB
+    Browser[Browser Vanilla JS + Leaflet]
+    API[Flask create_app CORS]
+    Pipe[Pipeline.run job_id]
+    IO[IO GeoRead/Write Affine]
+    Tile[TileManager 256+16]
+    SR[SRModel ESRGAN/SwinIR N-ch]
+    UQ[Uncertainty MC-Dropout]
+    MET[Metrics PSNR/SAM/ERGAS]
+    Store[(uploads / results 24h)]
+    W[weights/*.pth]
+    QGIS[QGIS COG]
+
+    Browser -- file --> API --> Pipe
+    Pipe --> IO --> Tile --> SR --> Tile --> UQ --> MET --> IO
+    IO --> Store --> Browser
+    W -. load .-> SR
+    Store --> QGIS
+```
+
+**Deployment:** Dev `python app.py` auto-reload (`Kepler-404/README.md:161`), Prod `gunicorn` Docker + GDAL, Vercel edge for demo.
+
+---
+
+## 3. Data Flow (N-Band)
+
+```mermaid
+flowchart LR
+    subgraph Input
+        TIF[Sentinel-2 L2A 10m<br/>NÃ—HÃ—W DN 10bit<br/>CRS 32643 Affine]
+    end
+    TIF --> NORM[Per-band 2-98% clip<br/>kepler/io.py:85-96<br/>â†’ uint8 0-255]
+    NORM --> TILE[Tile 256Ã—256 stride 240<br/>Gaussian weight Ïƒ=8]
+    TILE --> BAT[Batch 1Ã—NÃ—256Ã—256<br/>float 0-1 .to cuda]
+    BAT --> INF[SR 3Ã— PixelShuffle<br/>â†’ 1Ã—NÃ—768Ã—768]
+    INF --> STITCH[Stitch acc/weight_sum<br/>new_affine = old * Affine.scale w/new_w]
+    STITCH --> EXP[COG planar CÃ—H'Ã—W'<br/>tifffile tags 33550/33922/34735]
+    EXP --> OUT[SR GeoTIFF + PNG + Heatmap]
+```
+
+**State change example:** 1024Ã—1024Ã—4 input â†’ 16 tiles (4Ã—4 grid) â†’ 3072Ã—3072Ã—4 output. Transform `xres 10m â†’ 3.33m`, `yres -10m â†’ -3.33m`.
+
+---
+
+## 4. Training Flow (Offline, Synthetic Degradation `prompt.txt:103`)
+
+```mermaid
+flowchart TD
+    HR[SpaceNet 0.5m HR<br/>CÃ—HÃ—W]
+    HR --> BLUR[Gaussian PSF Ïƒ0.8 + resize INTER_AREA 6Ã— â†’ 3m]
+    BLUR --> SIM[Simulate Sentinel-2 PSF down 3Ã— â†’ synthetic 10m + 1% noise]
+    SIM --> PAIR[(Pair: synthetic 10m â†’ true 3.3m)]
+    PAIR --> AUG[Albumentations flip/rot/brightness per-band]
+    AUG --> LOSS[Model forward 1Ã—NÃ—256Ã—256<br/>Loss = L1 +0.1 Perceptual VGG +0.05 SAM]
+    LOSS --> OPT[AdamW lr 1e-4 mixed precision<br/>40 GPU-hrs Colab Pro]
+    OPT --> CKPT[weights/real_esrgan_4ch.pth<br/>first conv N-ch init mean RGB]
+```
+
+**Why synthetic:** Real paired 10mâ†”3m same-day does not exist publicly (`prompt.txt:101`). Synthetic gives perfect pairs; validated on held-out real Sentinel-2 unpaired via NIQE/PIQE.
+
+---
+
+## 5. Inference Pipeline Flow (Low-Level, `kepler/pipeline.py:42-91` Modified)
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant R as Routes /api/infer
+    participant P as Pipeline.run
+    participant I as IO.read_geotiff
+    participant T as TileManager
+    participant M as SRModel
+    participant S as Stitch
+    participant W as write_geotiff
+
+    C->>R: POST multipart file
+    R->>P: run(path, uuid_hex)
+    P->>I: GeoReadResult NÃ—HÃ—W + transform/crs
+    I-->>P: band, w,h,count
+    P->>P: normalize per-band
+    P->>T: tile(img) -> List[Tile coords, weight]
+    loop per tile batch
+        P->>M: super_resolve(tile_tensor)
+        M-->>P: sr_tile CÃ—768Ã—768
+        P->>M: uncertainty MC T=10 std
+    end
+    P->>S: stitch(sr_tiles, new_h, new_w, weights)
+    S-->>P: sr_array CÃ—H'Ã—W' + new_affine
+    P->>W: write_geotiff(sr, old_transform, crs, new_transform)
+    P->>W: write_png(sr) + heatmap.png
+    P-->>R: InferenceResult{images data URI, download, meta, metrics}
+    R-->>C: 200 JSON {input,sr,heatmap,download_tif,meta,metrics}
+```
+
+**Error branches:** `DecodingError 400`, `ProcessingError 500` (`kepler/pipeline.py:59-63`).
+
+---
+
+## 6. Tiling & Uncertainty Sub-Flows
+
+**Tiling:**
+```
+Input CÃ—HÃ—W â†’ for y in 0..H stride240, x in 0..W stride240: crop 256Ã—256 (pad reflect if edge) â†’ weight map Gaussian â†’ acc[C,H',W'] += sr_tile*weight ; weight_sum[H',W'] += weight â†’ final = acc/weight_sum â†’ seam RMSE <1 DN
+```
+
+**Uncertainty:**
+```
+Enable dropout p0.2 in tail only â†’ T=10 forwards on same tile â†’ stack CÃ—HÃ—WÃ—T â†’ mean (SR) + std (heatmap) â†’ normalize std 0-1 â†’ viridis colormap â†’ overlay threshold 0.6 red
+```
+
+---
+
+## 7. Metrics Flow
+
+```
+If synthetic pair available: sr vs gt â†’ PSNR (MUST â‰¥28) â†’ SSIM (â‰¥0.80) â†’ LPIPS â†’ SAM mean deg (<3Â°) â†’ ERGAS (<2.5) â†’ NDVI delta (<0.02)
+Else unpaired real: sr vs bicubic vs NIQE/BRISQUE no-reference + NDVI correlation r>0.98
+â†’ JSON metrics â†’ rendered in metrics-card (Mono Consolas, GREEN header per DRD)
+```
+
+---
+
+## 8. Decision Flow (Analyst Trust)
+
+```mermaid
+flowchart TD
+    SR[SR GeoTIFF] --> SAM{SAM >3Â°?}
+    SAM -->|Yes| REJ[Reject â€” spectral drift]
+    SAM -->|No| UQ{UQ std >0.6?}
+    UQ -->|Yes| WARN[Warn â€” flag region, human check `prompt.txt:108`]
+    UQ -->|No| OK[Accept â€” QGIS overlay RMSE <0.3px]
+    OK --> NDVI{NDVI r>0.98?}
+    NDVI -->|No| REJ
+    NDVI -->|Yes| SHIP[Ship to NTRO]
+```
+
+---
+
+## 9. Deployment Flow
+
+```
+Dev: git clone â†’ venv â†’ pip -r requirements.txt â†’ python app.py â†’ http://127.0.0.1:5000 (debug True)
+Train: datasets.py â†’ 10k synthetic tiles â†’ torch train â†’ weights/*.pth
+Prod: docker build python:3.9-slim + apt gdal â†’ gunicorn kepler.app:create_app() :5000 â†’ Vercel `vercel.json` or NTRO air-gapped systemd â†’ 24h purge on start
+SIH Submit: 6-slide PDF from PPT blueprint â†’ portal upload (PDF only, PPT not allowed per SIH2024_IDEA_Presentation_Format.pptx:Slide7)
+```
+
+---
+
+## 10. Failure Flows
+
+| Failure | Detection | Flow |
+|---|---|---|
+| 8-band on-spot file (`prompt.txt:98`) | `model.in_ch != input.count` | Return 400 + hint "Model 4ch vs input 8ch â€” using 4ch mean fallback" |
+| OOM 5000Ã—5000Ã—4 | `TileManager` mem check | Force tile batch size 1, stream write memmap |
+| CRS lost | `crs is None` after read | Export with `Unknown` + JSON warning, still PNG deliver |
+| High hallucination | SAM>3Â° or UQ>0.6 | Block auto-export, require manual approve |
+
+---
+
+*Traceability: Generated from `01_PRD.md` PR-03/04/05, `06_TRD.md` Â§2/7, `09_SDD.md` Â§6-7, `Kepler-404` audit. Keep tiling + SAM + uncertainty as non-negotiable per `prompt.txt:42/88/115`.*
+# MASTER PROMPT â€” Go Through All Files & Start Working on SIH26142 Sentinel-SRM
+## Copy-paste this into a new AI / Developer session to bootstrap implementation
+
+---
+
+### SYSTEM: You are a Senior Full-Stack + Geospatial + Deep Learning Engineer
+
+**Mission:** Read **EVERY** file listed below **in order**, then start implementing **SIH26142 NTRO â€” Deep Learning Based Super Resolution Mapping 10m Sentinel-2 â†’ <4m (3Ã—)** as a fork of the existing `Kepler-404/` prototype. Do not skip files. Do not hallucinate specs â€” all specs are in the files.
+
+---
+
+### PHASE 0 â€” READ ALL FILES (Read-Only, In Exact Order)
+
+**Step 0.1 â€” SIH Knowledge Base (Context):**
+
+1. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\README.md` â€” Master hub (226 PS, 18 themes, deadlines)
+2. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_About_SIH.md` â€” SIH process flow + 5-step adoption
+3. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_All_226_Problem_Statements.md` â€” Verify SIH26142 entry (Space Technology, Software, NTRO)
+4. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_AI_ML_Problem_Statements.md` â€” Confirm SIH26142 in CV cluster
+5. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\prompt.txt` â€” **CRITICAL** 10-point hackathon breakdown for PS142 (pain, feasibility, uncertainty injection, SAM, synthetic degradation, judge Q&A)
+6. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_Theme_And_Organization_Breakdown.md` â€” MoES/NTRO/ISRO org distribution
+7. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_Difficulty_Levels.md` â€” Why SIH26142 is Medium-Hard (yellow)
+8. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_RESEARCH_AND_ANALYSIS.md` â€” Competition: no sovereign SR product (status yellow, Overall 67)
+
+**Step 0.2 â€” Existing Prototype (Audit, Do Not Modify Yet):**
+
+9. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\README.md` â€” Kepler-404 200mâ†’100m TIR pipeline, mock ESRGAN/SwinIR, CRS preservation
+10. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\kepler\pipeline.py` â€” Pipeline.run() orchestration, Affine.scale logic
+11. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\kepler\io.py` â€” GeoReadResult, tifffile CRS tags, normalize 2-98% clip
+12. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\kepler\transforms.py` â€” Mock super_resolve (cv2.resize) + colorize (Inferno) â€” to be replaced N-channel
+13. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\kepler\config.py` â€” Settings host/port/debug, is_geotiff()
+14. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\kepler\app.py` + `app.py` â€” Flask create_app
+15. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\Kepler-404\requirements.txt` â€” Current deps (add torch/rasterio later)
+16. `https://kepler-404.vercel.app/` â€” Live demo (200mâ†’100m, 3-way slider) â€” inspect for UI parity
+
+**Step 0.3 â€” SIH Submission Format (Compliance):**
+
+17. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2024_IDEA_Presentation_Format.pptx` â€” Official 6+1 template extract (7 slides, last is instructions)
+18. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\sih py ppt.txt` â€” Exact visual code (HDR #1F4E79, GREEN #15803D, CREAM #FFF2CC, 13.333Ã—7.5) â€” for final PDF
+19. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH ppt 3.txt` â€” Reference winning ORBITGUARD deck structure (ignore content, keep 6-slide blueprint idea)
+20. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_PPT_Submission_Template.md` â€” Official 6-slide pointers (Slide1 Title â†’ Slide6 References)
+21. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\SIH2026_Idea_Research_Prompt_Template.md` â€” Deep-research template (11 sections)
+
+**Step 0.4 â€” Full Requirements Suite (Your Source of Truth, Read All 12):**
+
+22. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\00_INDEX.md` â€” Master index + traceability
+23. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\01_PRD.md` â€” What to build (PR-01â†’09, KPIs PSNRâ‰¥28 SAM<3Â°)
+24. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\02_BRD.md` â€” Business need (save $1000s/scene, on-prem sovereignty)
+25. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\03_MRD.md` â€” Market positioning vs Topaz/KSAT
+26. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\04_FRD.md` â€” Functional requirements (FR-01â†’12, 4-layer viewer)
+27. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\05_SRS.md` â€” IEEE 830 spec, API contracts
+28. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\06_TRD.md` â€” Constraints (50MB, 3Ã— scale, tiling 256+16, GPU mandatory)
+29. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\07_DRD.md` â€” Design system (glassmorphism, colors, slider)
+30. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\08_TDD.md` â€” How to implement (new patch.py/metrics.py/datasets.py, modify io/transforms)
+31. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\09_SDD.md` â€” Detailed modules, loss L1+Perceptual+SAM, TileManager
+32. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\10_HLD.md` â€” High-level architecture & deployment Docker/Vercel
+33. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\11_LLD.md` â€” Low-level classes, API JSON, pseudocode, DB schema
+34. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\flow.md` â€” 10 flows (user, system, data, training, inference sequence)
+35. `C:\Users\Dinesh B Pawar\OneDrive\Desktop\SIH-2026\docs\SIH26142\development_cycle.md` â€” Agile 3-sprint working cycle (M1â†’M3, daily loop, CI/CD)
+
+**After reading all 35 items, you must be able to answer:**
+
+* What is the exact SIH26142 expected solution (`prompt.txt:47-52`)?
+* Why must you NOT use JPG/PNG (`prompt.txt:55`)?
+* What is the synthetic degradation trick (`prompt.txt:103`) and why is it needed (`prompt.txt:101`)?
+* How does Kepler-404 preserve CRS (`kepler/io.py:104-142` + `pipeline.py:87-89`)?
+* What is the loss formula (`prompt.txt:88`)?
+* What are the 3 judge Q&A answers (`prompt.txt:106-115`)?
+
+If you cannot, re-read the listed files â€” do not proceed.
+
+---
+
+### PHASE 1 â€” VERIFY ENVIRONMENT (Before Coding)
+
+1. Confirm `python --version` 3.9+, `pip list` shows `flask, tifffile, affine, opencv`, install missing `torch, rasterio, scikit-image, lpips` per `06_TRD.md` Â§5.
+2. Run existing Kepler-404: `cd C:\...\Kepler-404 && python app.py` â†’ hit `http://127.0.0.1:5000` â†’ upload `sample.tiff` â†’ verify 200â†’100m + CRS `EPSG:32643` in JSON.
+3. Run `pytest` â†’ all green (`Kepler-404/.pytest_cache`).
+4. Create branch: `git checkout -b sih26142-sentinel` from `Kepler-404/`.
+
+---
+
+### PHASE 2 â€” IMPLEMENT IN ORDER (Strict Sequence, No Skipping)
+
+**Sprint M1 (Days 5-7) â€” I/O + Tiling + Synthetic Data:**
+
+* Task M1.1: Fix `kepler/io.py` â€” modify `read_geotiff()` to keep ALL bands (`raw[:,:,0]` bug â†’ keep `CÃ—HÃ—W`), add `count` to `GeoReadResult`, per-band `normalize_to_uint8_per_band()` (see `09_SDD.md` Â§5.2).
+* Task M1.2: Create `kepler/patch.py` â€” `TileManager` 256Ã—256 stride 240 Gaussian weight (`09_SDD.md` Â§4.1/6.3).
+* Task M1.3: Create `kepler/datasets.py` â€” `degrade()` SpaceNet 0.5m â†’ synthetic 10m (Gaussian blur + INTER_AREA 6Ã—) (`11_LLD.md` Â§5.1).
+* Task M1.4: Patch `kepler/pipeline.py` â€” branch tiling loop, compute `new_affine = old * Affine.scale(w/new_w, h/new_h)`, test seam RMSE <1 DN.
+* **Exit M1:** `pytest tests/test_io_nch tests/test_patch` green, 10k synthetic tiles generated.
+
+**Sprint M2 (Days 8-14) â€” Model + Loss + Metrics:**
+
+* Task M2.1: Modify `kepler/transforms.py` â€” `SRModel` factory `in_ch=N out_ch=N` 1Ã—1 conv mean init, `super_resolve()` torch forward (`11_LLD.md` Â§2.4), keep `colorize` only for `--mode=tir` flag.
+* Task M2.2: Train EDSR baseline (fast) then Real-ESRGAN/SwinIR on synthetic pairs, loss `L1 +0.1 Perceptual +0.05 SAM` (`09_SDD.md` Â§6.2), mixed precision, log PSNR/SSIM/SAM.
+* Task M2.3: Create `kepler/metrics.py` â€” `sam()`, `psnr`, `ssim`, `ergas`, `ndvi_delta` (`11_LLD.md` Â§5.3).
+* **Exit M2:** Holdout PSNRâ‰¥28 SSIMâ‰¥0.80 SAM<3Â° (`01_PRD.md` Â§8).
+
+**Sprint M3 (Days 15-17) â€” Uncertainty + Viewer + Export:**
+
+* Task M3.1: Add `uncertainty()` MC-Dropout T=10 std â†’ heatmap 0-1 viridis (`09_SDD.md` Â§6.4).
+* Task M3.2: Extend `kepler/models.py` `ImageSet` to `input/sr/heatmap`, update `routes.py` JSON contract (`11_LLD.md` Â§3.1).
+* Task M3.3: Update `templates/index.html` + `static/js/script.js` â€” 4th heatmap layer slider, metrics card Mono `Consolas` (`07_DRD.md` Â§4-5), keep glassmorphism.
+* Task M3.4: Modify `kepler/io.py:write_geotiff` to write N-band planar COG (`tifffile.imwrite` `CÃ—HÃ—W`), verify QGIS overlay RMSE <0.3px.
+* **Exit M3:** E2E `POST /api/infer` 1024Ã—1024Ã—4 finishes â‰¤30s CPU, download_tif is valid COG.
+
+---
+
+### PHASE 3 â€” TEST, INTEGRATE, DEPLOY
+
+* **Test (D18-19):** Run full `pytest` + manual `sample.tiff` + synthetic 4-band + 8-band on-spot (`prompt.txt:98`) â†’ no crash.
+* **Integrate (D20):** Merge `develop` â†’ `main`, tag `v1.0-sih`, Docker build `python:3.9-slim + gdal`.
+* **Deploy (D21):** `vercel.json` deploy for demo + on-prem image for NTRO air-gapped.
+* **Docs (D22):** Generate 6-slide PPT text per previous Slide 1-6 blueprint (use image prompts in `flow.md` Â§9 for diagrams), export PDF (PDF only, no PPT per `SIH2024_IDEA:Slide7`), fill `SIH2026_Idea_Research_Prompt_Template.md` 11 sections.
+
+---
+
+### PHASE 4 â€” VALIDATION GATES (Must Pass Before Claiming Done)
+
+* [ ] N-channel roundtrip CRS preserved: input EPSG == output EPSG, affine scaled correctly
+* [ ] SAM <3Â°, NDVI r>0.98 (`prompt.txt:68` judge will test NDVI)
+* [ ] 8-band file does not crash (dynamic channel)
+* [ ] GB scene via tiled inference no OOM, no seam lines
+* [ ] Uncertainty Pearson std vs error >0.6
+* [ ] SIH 6-slide PDF compliant (points not paragraphs, 6 max, real flowchart)
+
+---
+
+### RULES
+
+* Do not change API shape beyond adding `heatmap`/`metrics` â€” keep `success, images, download, meta` contract (`Kepler-404/README.md:178-197`).
+* Do not invent datasets/metrics â€” only use verifiable sources (Copernicus, SpaceNet, SAM).
+* Every edit must keep `kepler/pipeline.py:59-63` error wrapping and 24h purge (`Kepler-404/README.md:284`).
+* Quote file:line when referencing code (e.g., `kepler/io.py:60-61`).
+
+---
+
+### OUTPUT EXPECTED AFTER THIS PROMPT
+
+1. Confirmation you read all 35 files (list them).
+2. Branch `sih26142-sentinel` created.
+3. M1 tasks completed with `pytest` logs + 1 synthetic pair visualized.
+4. Daily demo at 17:00 on real Sentinel-2 tile.
+
+**Now start: Read files 1â†’35 in order and begin M1.1. Show your first `read_geotiff` N-band fix diff.**
+# UPDATED FULL DOCUMENT â€” SIH26142 NTRO Sentinel Super-Resolution (v2 â€” New Project, Not a Fork)
+
+**PS:** SIH26142 â€” Deep Learning Based Super Resolution Mapping from Medium Resolution Satellite Imagery | **Org:** NTRO | **Theme:** Space Technology (Software) | **Category:** Software | **Scale:** 10m Sentinel-2 â†’ <4m (3Ã— â†’ 3.33m)  
+**Version:** 2.0 (New Project) | **Date:** 2026-08-29 | **Base:** Fresh build (inspired by Kepler-404 ideas, zero code reuse) | **Source Docs:** `docs/00_INDEX` + `prompt.txt:4-52`
+
+> **Change from v1:** v1 assumed `Kepler-404/` fork (single-channel TIR 200â†’100m mock `transforms.py:38`). **v2 is a completely new project** â€” fresh `Sentinel-SRM/` scaffold, no file copy, no Kepler debt (no `raw[:,:,0]` bug `io.py:60`, no Inferno colorization). All code written N-channel-first.
+
+---
+
+## 1. EXECUTIVE SUMMARY
+
+**Problem:** Free Sentinel-2 (10m, 5-day revisit) cannot resolve narrow roads/small buildings/field boundaries/water edges (`prompt.txt:5-7`). Commercial <1m costs $1000s/scene with low revisit. Traditional bicubic is blurry; GANs hallucinate bridges that mislead defence analysts (`prompt.txt:106`).
+
+**Solution:** Fresh Python+PyTorch pipeline that reads N-band (4 default RGB+NIR, dynamic to 8/13) GeoTIFF preserving CRS+affine, tiles 256+16 Gaussian blend (`prompt.txt:115`), runs N-channel ESRGAN/SwinIR 3Ã— with loss `L1+0.1Â·Perceptual+0.05Â·SAM` (`prompt.txt:88`), produces per-pixel uncertainty via MC-Dropout T=10, validates PSNR/SSIM/SAM/ERGAS/NDVI, exports COG GeoTIFF + heatmap ready for QGIS (`prompt.txt:47-52`).
+
+**Differentiation:** Synthetic degradation (SpaceNet 0.5m â†’ synthetic 10m) solves paired-data impossibility (`prompt.txt:103`), SAM keeps spectral truth (`prompt.txt:64`), uncertainty is the trust layer â€” Topaz strips metadata (`prompt.txt:38`), papers hallucinate.
+
+**KPI:** PSNRâ‰¥28dB SSIMâ‰¥0.80 SAM<3Â° ERGAS<2.5 NDVI r>0.98; QGIS overlay RMSE<0.3px; demo 1024Ã—1024Ã—4 â‰¤30s CPU / â‰¤10s GPU; hallucination <2% flagged.
+
+---
+
+## 2. PRD â€” Product Requirements
+
+**Stakeholders:** NTRO analyst (primary, needs trust), urban/disaster planners (secondary), ISRO judge (geospatial fidelity), AgTech/research (NDVI).
+
+**User Stories:**
+1. As analyst, I upload 10m 4-band `.tif` â‰¤50MB â†’ get `<4m` COG + heatmap to verify per-pixel reliability.
+2. As planner, I compare 10m vs SR vs heatmap in viewer with DN stats.
+3. As evaluator, I run NDVI on output and it matches input (r>0.98) and overlay is pixel-perfect.
+
+**Requirements (P0 = must for SIH internal):**
+
+| ID | Requirement | Acceptance |
+|---|---|---|
+| PR-01 | Accept `.tif/.tiff` 1/3/4/8-band â‰¤50MB, preserve CRS via TIFF tags 33550/33922/34264/34735 | Round-trip `Affine.scale` test |
+| PR-02 | Auto-detect channel count, dynamic 1Ã—1 conv in/out â€” 8-band on-spot `prompt.txt:98` must not crash | 4 & 8 band pass |
+| PR-03 | 3Ã— upscale via 256Ã—256+16 overlap Gaussian blend, stitch seamless | Seam RMSE<1 DN, <8GB RAM on 1GB input |
+| PR-04 | `Loss = L1 + Perceptual(VGG) + Î»Â·SAM` | SAM<3Â° val |
+| PR-05 | Uncertainty heatmap MC-Dropout T=10 std â†’ viridis 0-1, threshold 0.6 red | Pearson std vs error >0.6 |
+| PR-06 | Metrics panel PSNR/SSIM/LPIPS/SAM/ERGAS/NDVI-delta | Rendered |
+| PR-07 | COG GeoTIFF planar CÃ—HÃ—W + PNG data URI `POST /api/infer` JSON `{success,images{input,sr,heatmap},download*,meta,metrics}` | QGIS overlay OK |
+| PR-08 | 4-layer viewer slider (input/SR/heatmap/diff) | Keyboard+pointer |
+| PR-09 | Batch folder (future) | P2 |
+
+---
+
+## 3. BRD â€” Business Requirements
+
+**Need:** Sovereign, cost-free extraction of <4m value from open EO â€” reduce Maxar/Planet buy.
+
+**Objectives:** Cost/kmÂ² â†“70%, hallucination <2% flagged, NDVI r>0.98, on-prem air-gapped (no foreign API, mirrors Kepler local Flask but fresh).
+
+**Rules:** No hallucinated structure without high uncertainty veto; SAM â‰¤3Â°; EPSG retained; 24h purge for demo, on-prem persistent for NTRO.
+
+**Value:** SIH win â†’ internship â†’ ministry beta (`SIH2026_About_SIH.md:43-48` 5-step) â†’ state pilot (Maharashtra) â†’ STAC/Bhuvan â†’ AgTech API freemium.
+
+**Riskâ†’Mitigation:** hallucinationâ†’uncertainty veto; no paired dataâ†’synthetic degradation business-approved; NIR strippedâ†’N-channel+SAM.
+
+---
+
+## 4. MRD â€” Market Requirements
+
+**Market:** EO analytics $8B global, India ~$1B; 10-30m medium-res dominates but lacks fine detail.
+
+**Segments:** NTRO/defence (high willingness), ISRO/NDMA/urban (high sovereign), AgTech/insurance (medium cost-save), GIS firms (medium).
+
+**Competition vs Positioning:**
+| Competitor | Price | Gap |
+|---|---|---|
+| Topaz Photo AI | $199 | Strips CRS+NIR, not geospatial |
+| Research ESRGAN on SpaceNet | Free | RGB-only, hallucinates, no SAM/uncertainty |
+| KSAT SAR | Enterprise | Not SR, foreign |
+
+**Need:** Open-data, QGIS-ready COG, quantified uncertainty, on-prem, web demo.
+
+**TAM:** India 3.2M kmÂ² Ã— 230M kmÂ²/year; 1% adoption â†’ â‚¹11Cr/year India Gov saved @â‚¹5/kmÂ².
+
+**GTM:** SIH â†’ NTRO beta â†’ STAC â†’ AgTech API.
+
+---
+
+## 5. FRD â€” Functional
+
+| ID | Function | I/O | Rule |
+|---|---|---|---|
+| FR-01 | Ingest GeoTIFF | NÃ—HÃ—W + CRS/affine | Keep all bands (not `raw[:,:,0]`) |
+| FR-02 | Validate | Header | 400/415 JSON clean |
+| FR-03 | Normalize | per-band 2-98% clip â†’ uint8 | Per-band, not global |
+| FR-04 | Tile | HÃ—WÃ—C â†’ 256+16 list + weights | Gaussian |
+| FR-05 | SR tile | 256Ã—256Ã—C â†’ 768Ã—768Ã—C | N-ch ESRGAN/SwinIR, batched |
+| FR-06 | Uncertainty | T passes â†’ HÃ—W heatmap | std 0-1 |
+| FR-07 | Stitch | Tiles+weights â†’ NÃ—H'Ã—W' + new affine `*Affine.scale(w/new_w,h/new_h)` | CRS unchanged, pixel Ã·3 |
+| FR-08 | Metrics | vs ref if synthetic else no-ref NIQE | SAM arccos, ERGAS, NDVI delta |
+| FR-09 | Export | COG + PNG + data URI | Tags 33550/33922/34735 planar |
+| FR-10 | Viewer | 4-layer slider + stats + downloads | Data URI avoids /tmp |
+| FR-11 | Purge | 24h | On start |
+
+**Flows:** UC-01 Uploadâ†’SRâ†’Viewerâ†’QGIS; UC-02 synthetic validation table.
+
+---
+
+## 6. SRS â€” Software Spec (IEEE 830)
+
+**Scope:** Web service + ML pipeline + viewer.
+
+**F-SRS-01:** `POST /api/infer` multipart `file` â†’ `200 {success,images{input,sr,heatmap},download,download_tif,download_heatmap,meta{job_id,input_size,output_size,crs,elapsed,file_type},metrics{psnr,ssim,sam,ergas,ndvi}}` (extends Kepler `README:178-197` add heatmap/metrics).
+
+**F-SRS-02:** CRS preserve via tags 33550/33922/34735 + `Affine.scale`.
+
+**F-SRS-03:** Auto-detect 1/3/4/8 bands, route N-ch without config.
+
+**Perf:** 1024Ã—1024Ã—4 CPU â‰¤30s GPU â‰¤10s; 1 concurrent queue; 24h ephemeral.
+
+**Constraints:** Python 3.9+, Flask+CORS, `MAX_CONTENT_LENGTH=50MB`, stateless `Pipeline`, `ProcessingError`â†’500, `DecodingError`â†’400.
+
+**Attributes:** Reliable (wrap exc), Usable (ARIA, `prefers-reduced-motion`), Secure (no persist >24h), Portable (Docker+vercel).
+
+**Validation:** PSNR/SSIM/LPIPS SAM ERGAS NDVI; RMSE<0.3px tiepoint.
+
+---
+
+## 7. TRD â€” Technical Constraints
+
+| ID | Constraint | Value | Src |
+|---|---|---|---|
+| TR-C01 | Max upload | 50MB 413 else | Kepler `README:281` |
+| TR-C02 | Formats | `.tif/.tiff` + `.png/.jpg` | `README:282` |
+| TR-C03 | Scale | 3Ã— 10mâ†’3.33m | `prompt.txt:47` |
+| TR-C04 | Retention | 24h purge | `README:284` |
+| TR-C05 | Port | 5000 `Settings` | â€” |
+| TR-C06 | Python | 3.9+ | â€” |
+| TR-C07 | Tile | 256+16 Gaussian | `prompt.txt:115` |
+
+**Stack:**
+
+```
+Backend Flask+Gunicorn+CORS | Geospatial Rasterio/GDAL/Affine/tifffile/Geopandas | Image opencv/numpy/pillow/scikit-image/lpips | ML PyTorch+torchvision ESRGAN/SwinIR albumentations | Frontend Vanilla JS+Leaflet+GeoTIFF.js (React-ready Vite) | Infra Docker python:3.9-slim+gdal Vercel nvidia-docker | Train Colab Pro T4/A100 40 GPU-hrs mixed precision
+```
+
+**Deps:**
+
+```
+flask, flask-cors, opencv-python-headless, numpy, tifffile, affine, rasterio, geopandas, pyproj, torch, torchvision, scikit-image, lpips, albumentations, pytest, gunicorn
+```
+
+**Data:** Sentinel-2 L2A Copernicus/GEE 10m B02/B03/B04/B08; synthetic SpaceNet 0.5m blurred+INTER_AREA 6Ã—â†’3mâ†’10m +1% noise + CRS manifest; val PlanetScope 3m/Cartosat 1m holdout.
+
+**Perf/Security/Scale:** Tile <200ms GPU, seam RMSE<1, validation `is_geotiff()`+magic, stateless horizontal replicas.
+
+---
+
+## 8. DRD â€” Design
+
+**System:** `HDR #1F4E79` diamond, `GREEN #15803D` subhead, `RED #A32B20` warning, `CREAM #FFF2CC` flow, `GREY #F2F2F2` method, `BLACK` border, `WHITE` box; Serif 23pt Times title, Calibri 10-11pt body, Consolas mono metrics; 13.333Ã—7.5 LB0.3/RB6.95.
+
+**UX:** Glassmorphism, dot cursor, particle hero, dark/light `localStorage`, drag-drop+sample chips (Urban/Ocean/Volcanic/Desert), 4-way slider drag+keyboard, telemetry job_id/dims/CRS/elapsed, PNG+COG download, toast, offline preview, responsive drawer+ESC, progress via real response.
+
+**IA:** Header SIH26142 | Pipeline 4 nodes (Ingestâ†’SRâ†’Uncertaintyâ†’Export) | Demo uploadâ†’results grid data URIâ†’metricsâ†’downloads | FAQ TIRâ†’SAM/NDVI.
+
+---
+
+## 9. TDD â€” How to Build (New Project, No Fork Debt)
+
+**Context:** External Copernicus/GEE, SpaceNet, QGIS, SIH portal PDF; internal Flask `core/app.py` â†’ `Pipeline` â†’ `IO` â†’ `Patch` â†’ `SR` â†’ `Metrics`.
+
+**Components (all fresh, no copy):**
+
+| Comp | File (new) | Responsibility |
+|---|---|---|
+| Config | `core/config.py` | `tile_size=256 overlap=16 scale=3 device cuda/cpu model_name dropout mc` |
+| IO | `core/io.py` | N-band `GeoReadResult{band:CÃ—HÃ—W,transform,crs,w,h,count}`, per-band 2-98% clip, COG planar write tags |
+| Patch | `core/patch.py` | `TileManager` Gaussian weight, `tile()`/`stitch()` |
+| SR | `core/transforms.py` | `SRModel(in_ch,out_ch)` RRDB 23, PixelShuffle 3Ã—, `super_resolve()`+`uncertainty()` MC |
+| Metrics | `core/metrics.py` | sam/psnr/ssim/ergas/ndvi |
+| Datasets | `core/datasets.py` | `degrade()` 0.5mâ†’10m synthetic |
+| Pipeline | `core/pipeline.py` | `run(path,job_id)` Stateless orchestration |
+| Routes | `api/routes.py` | `/api/infer` multipart, `/download` |
+| Frontend | `frontend/` | Vanilla JS (React-ready) Leaflet viewer |
+
+**Data Flow:** `TiffFile â†’ GeoReadResult CÃ—HÃ—W â†’ normalize â†’ TileManager â†’ SRModel 1Ã—CÃ—256â†’1Ã—CÃ—768 â†’ stitch acc/weight â†’ heatmap â†’ metrics â†’ tifffile planar â†’ data URI â†’ JSON`.
+
+**Deployment:** Dev `python app.py` debug reload; Prod `gunicorn core.app:create_app()` Docker GDAL; Vercel demo data URI avoids /tmp; NTRO on-prem systemd.
+
+**Migration note:** No `MODE=tir` flag needed (fresh), Kepler ideas reused logically not code-wise.
+
+---
+
+## 10. SDD â€” Detailed Architecture
+
+**Modules:**
+
+```
+Sentinel-SRM/
+ app.py (launcher) | core/{app,config,exceptions,logging,io,patch,transforms,metrics,datasets,models,pipeline} | api/routes | frontend/{templates,static} | weights/ | uploads/ static/results/ | tests/
+```
+
+**Data Models:**
+
+```python
+GeoReadResult{band: CÃ—HÃ—W uint8, transform:Affine, crs:"EPSG:32643", width,height,count}
+InferenceResult{job_id, images{input,sr,heatmap}, download*, meta{input_size,output_size,crs,elapsed,file_type}, metrics{psnr,ssim,sam,ergas,ndvi}}
+JobMeta{job_id,input_size,output_size,crs,elapsed,file_type}
+```
+
+**Sequences:** Clientâ†’Routes `multipart` â†’ Pipeline `is_geo?` â†’ IO `CÃ—HÃ—W` â†’ Patch `tiles` â†’ SR per tile batched â†’ stitch `H'Ã—W'`+`new_affine` â†’ metrics â†’ IO `COG+tifffile tags`+`write_png`Ã—3 â†’ `to_dict()` data URI â†’ 200 JSON.
+
+**Algorithms:**
+* SR RRDB `in_nc=N out_nc=N nf64 nb23 scale3` first conv `64Ã—NÃ—3Ã—3` RGB copied NIR=mean RGB; `x/255â†’modelâ†’clipâ†’uint8`.
+* Loss `L1+0.1Â·Perceptual VGG+0.05Â·SAM`; `SAM=mean(arccos(dot/|pred||gt|))`; optional `|NDVI_sr-NDVI_gt|`.
+* Tile 256 stride240 weight `exp(-dÂ²/2ÏƒÂ²)` Ïƒ=overlap/2; `acc[C,H',W'] / wsum`.
+* Uncertainty MC p0.2 T10 â†’ mean+std â†’ viridis normalized, threshold 0.6 red.
+* Metrics PSNR `10log10(255Â²/MSE)` SSIM skimage LPIPS VGG SAM ERGAS `100Â·h/lÂ·sqrt(mean((RMSE/B)Â²))` NDVI `(NIR-Red)/(NIR+Red)`.
+
+**Config `Settings` as TRD Â§7** with `ensure_dirs()` `is_geotiff()`.
+
+**Tests:** `test_io` N-band CRS roundtrip Affine.scale, `test_patch` checkerboard RMSE<1, `test_transforms` 4&8 shape, `test_pipeline_e2e` JSON contract `sample.tiff`+synthetic 4-band.
+
+---
+
+## 11. HLD â€” Overall Architecture
+
+```
+              Copernicus/GEE 10m 4-band
+                        â”‚
+Analyst Browser â”€â”€â–º Sentinel-SRM Flask â”€â”€â–º QGIS/ArcGIS COG
+                        â”‚                    â–²
+                        â”œâ”€â–º weights ESRGAN/SwinIR
+                        â””â”€â–º metrics/log
+```
+
+**Components:** Web UI (Leaflet), API Gateway (Flask CORS), Orchestrator (`Pipeline.run`), IO (Rasterio), ML (PyTorch), Tiling, Metrics, Storage 24h, Dataset Builder SpaceNet.
+
+**Deployment:** Browser HTTPâ†’Flask Gunicorn :5000 Docker (uploads/results emptyDir, weights readOnly, GPU optional) â†’ Vercel edge demo, on-prem NTRO.
+
+**Interfaces:** `POST /api/infer` GeoTIFF, `GET /api/download`, COG tags, SIH PDF 6 slides.
+
+**Flow high:** `Input 10m NÃ—HÃ—W â”€normalizeâ”€â–º 256 tiles â”€SR 3Ã—â”€â–º 768 tiles â”€stitchâ”€â–º SR NÃ—H'Ã—W' + heatmap â”€metricsâ”€â–º JSON+COG`.
+
+**NFR:** Stateless UUID, <8GB RAM via tiling, wrap `DecodingError 400`/`ProcessingError 500`, 50MB limit, no exec.
+
+---
+
+## 12. LLD â€” Classes/APIs/DB/Algorithms (Low Level)
+
+**Classes:** `Settings` (host/port/debug/upload/results/max_bytes/tile/scale/device/dropout/mc), `GeoReadResult` CÃ—HÃ—W, `Tile{data:CÃ—256,coords,weight}`, `TileManager tile()/stitch()`, `SRModel(in_ch,out_ch,scale,arch)` RRDB `__call__(1Ã—CÃ—HÃ—W)`, `Pipeline(run, _process_geotiff, _shared_stages)`.
+
+**APIs:**
+* `POST /api/infer` req `multipart file` (50MB) â†’ validate 413/415 â†’ `200 {success,images{input,sr,heatmap: data URI},download,download_tif,download_heatmap,meta{job_id,input_size,output_size,crs,elapsed,file_type},metrics{psnr,ssim,sam,ergas,ndvi}}`
+* `GET /api/download/<f>` `Content-Disposition attachment` 404 if purged.
+
+**DB:** No DB MVP; optional SQLite `jobs(job_id, input_name,crs,input_size,output_size,elapsed,psnr,created_at)`.
+
+**Pseudocode:** `degrade()` Gaussian PSF 0.8 INTER_AREA, `normalize_per_band()` 2-98% clip, `sam()` `arccos(dot/norms)`, `TileManager` unfold Gaussian, `Pipeline` tileâ†’`torch.from_numpy/255`â†’`model`â†’`clip`â†’`stitch`â†’`tifffile planar`.
+
+**File Paths:** `app.py`â†’`core/app:create_app`â†’`api/routes`â†’`core/pipeline:run`; `static/results/<job>_*.png` data URI, `weights/real_esrgan_4ch.pth` lazy.
+
+**Sequence tiled SR loop:** `tile_tensor 1Ã—CÃ—256 â†’ model â†’ 1Ã—CÃ—768 â†’ uint8 â†’ acc*weight / wsum`.
+
+**Tests:** `test_io_ndim` 4-band CRS, `test_patch` seam RMSE<1, `test_sam` sameâ‰ˆ0Â° random>10Â°.
+
+---
+
+## 13. FLOW â€” End-to-End Flows (Mermaid)
+
+User Journey (uploadâ†’4-layer viewerâ†’QGIS), System (Browserâ†’Flaskâ†’Patchâ†’SRâ†’Metricsâ†’QGIS), Data (NÃ—HÃ—Wâ†’tileâ†’batchâ†’stitchâ†’COG), Training (SpaceNet 0.5mâ†’blurâ†’synthetic 10mâ†’pairâ†’VGG+SAMâ†’AdamW), Inference sequence (multipartâ†’readâ†’tileâ†’SRâ†’stitchâ†’heatmapâ†’writeâ†’JSON), Tiling/Uncertainty/Metrics sub-flows, Decision SAM>3Â° reject / UQ>0.6 warn, Deployment dev/train/prod/SIH, Failures (8-band, OOM, CRS lost, hallucination).
+
+---
+
+## 14. DEVELOPMENT CYCLE â€” Agile 3 Sprints
+
+**Overall:** P1 Planning 2d â†’ P2 Design 2d â†’ M1 I/O+Tiling 3d â†’ M2 Train 7d â†’ M3 Viewer+Uncertainty 3d â†’ Test 2d â†’ Integrate 1d â†’ Deploy 1d â†’ Demo 2d â†’ Feedback 1d (21d total `SIH2026_About_SIH:15-24`).
+
+**M1 D5-7:** `core/io.py` all bands, `core/patch.py` Gaussian, `core/datasets.py` synthetic 10k tiles, `pipeline` tiling, seam RMSE<1.
+
+**M2 D8-14:** `core/transforms.py` N-ch 1Ã—1, train EDSRâ†’Real-ESRGAN loss `L1+0.1Perceptual+0.05SAM`, `core/metrics.py` SAM/ERGAS/NDVI.
+
+**M3 D15-17:** `uncertainty()` T10, `models.ImageSet` heatmap, `frontend` 4th layer, N-band COG, E2E â‰¤30s CPU.
+
+**Daily Loop:** 09:00 standup â†’ `feat/*` branch â†’ code+`pytest watch` â†’ PR 1 approver â†’ CI `ruff/pytest/docker/vercel` â†’ merge `develop` â†’ 17:00 demo `sample.tiff`.
+
+**Branching:** `main (deploy) â† develop â† feat/patch, feat/nch-sr, feat/uncertainty`; tags `v0.1-m1 v0.2-m2 v1.0-sih`.
+
+**CI:** push `develop` â†’ lint â†’ `pytest -k not slow` â†’ docker GDAL â†’ vercel prebuilt â†’ slack metrics.
+
+**DoD SIH:** CRS preserved `Affine.scale`, SAM<3Â° NDVI r>0.98, 8-band no crash `prompt.txt:98`, GB tiled no OOM no seam, Pearson >0.6, 6-slide PDF points not paragraphs real flowchart.
+
+---
+
+## 15. TECH STACK â€” Why Fresh
+
+| Layer | Choice | Why Fresh |
+|---|---|---|
+| Backend | Flask+Gunicorn | Light vs Django, keeps Kepler CORS idea but no copy |
+| Geospatial | Rasterio/GDAL/Affine/tifffile | Fresh N-band first (no `raw[:,:,0]` debt) |
+| ML | PyTorch ESRGAN/SwinIR | Mandatory `prompt.txt:22`, 1Ã—1 dynamic N-ch from day 1 |
+| Frontend | Vanilla JS+Leaflet (React-ready Vite) | No Kepler `model` debt, fresh 4-layer |
+| Infra | Docker gdal, Vercel, Colab Pro | Sovereign, stateless, 24h purge |
+
+**Traceability v2:** Every section maps to `prompt.txt:4-52` (painâ†’SAMâ†’syntheticâ†’Q&A), SIH 6-slide `sih py ppt.txt:8-36`, and `SIH2026_RESEARCH:67`.
+
+---
+
+*End v2 â€” New Project. Next: `git init` fresh `Sentinel-SRM/` scaffold per SDD Â§10 when you say â€œStart M1â€.*

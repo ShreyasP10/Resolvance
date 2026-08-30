@@ -1,0 +1,172 @@
+﻿*{box-sizing:border-box} body{margin:0;font-family:system-ui,Arial,sans-serif;background:#f5f5f5;color:#111;line-height:1.4}
+header{background:#1F4E79;color:#fff;padding:16px;text-align:center}
+header h1{margin:0;font-size:22px} header p{margin:4px 0 0;opacity:.9;font-size:13px}
+main{max-width:1000px;margin:auto;padding:12px}
+.card{background:#fff;border:1px solid #ddd;border-radius:8px;padding:14px;margin:12px 0}
+.card h2{margin:0 0 8px;font-size:16px;border-bottom:1px solid #eee;padding-bottom:6px}
+.muted{font-size:12px;color:#666;margin:0 0 8px}
+.drop{border:2px dashed #1F4E79;border-radius:8px;padding:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.drop input{flex:1}
+button{background:#1F4E79;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer}
+button:hover{background:#163a5a}
+.status{font-size:13px;font-family:monospace}
+.images{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.images h3{font-size:13px;margin:0 0 4px;text-align:center}
+.images img{width:100%;border:1px solid #ddd;border-radius:6px;background:#eee;min-height:120px;object-fit:contain}
+@media(max-width:700px){.images{grid-template-columns:1fr}}
+.slider-label{display:flex;gap:8px;align-items:center;margin:10px 0;font-size:13px}
+.slider-label input{flex:1}
+.compare{position:relative;border:1px solid #ddd;border-radius:6px;overflow:hidden;height:220px;background:#000}
+.compare img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+#c-input{clip-path:inset(0 50% 0 0)} #c-heat{clip-path:inset(0 0 0 50%)}
+.handle{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#00c853}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+@media(max-width:700px){.two{grid-template-columns:1fr}}
+.two h3{font-size:13px;margin:0 0 4px}
+.two pre{background:#f7f7f7;border:1px solid #ddd;border-radius:6px;padding:8px;font-size:11px;white-space:pre-wrap;word-break:break-all;min-height:60px}
+.downloads a{display:inline-block;margin:6px 6px 0 0;background:#15803D;color:#fff;padding:6px 10px;border-radius:6px;text-decoration:none;font-size:13px}
+.proof-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.proof-card{margin-top:8px}
+.proof{border:1px solid #ddd;border-radius:6px;padding:6px;text-align:center;font-size:12px}
+.proof.pass{background:#e6f4ea;border-color:#15803D} .proof.fail{background:#fce8e6;border-color:#A32B20}
+.proof b{display:block;font-family:monospace;font-size:13px}
+.info{font-size:13px;margin:0;padding-left:18px}
+footer{text-align:center;padding:12px;font-size:11px;color:#666}
+const $=id=>document.getElementById(id);
+const statusEl=$('status'), slider=$('slider'), valEl=$('slider-val');
+
+function setStatus(msg, err=false){
+  statusEl.textContent=msg;
+  statusEl.style.color=err?'#A32B20':'#15803D';
+}
+
+function renderProof(j){
+  const m=j.metrics||{}, meta=j.meta||{};
+  // CRS card
+  const crsOk = meta.crs && meta.crs!=='Unknown' && meta.crs.includes('EPSG');
+  $('crs-card').innerHTML = `<div class="proof ${crsOk?'pass':'fail'}"><b>${meta.crs||'Unknown'}</b>CRS ${crsOk?'âœ“ preserved':'âœ— Unknown (PNG)'}<br><small>${meta.input_size} â†’ ${meta.output_size}</small></div>`;
+  // Downloads
+  $('downloads').innerHTML = `<a href="${j.download}">â¬‡ PNG</a> <a href="${j.download_tif||'#'}">â¬‡ COG GeoTIFF</a> <a href="${j.download_heatmap||'#'}">â¬‡ Heatmap TIF</a><br><small>Open COG in QGIS â†’ overlay check</small>`;
+  // Metrics proof grid
+  const sam = m.sam_mean_deg, ndvi = m.ndvi_corr, rmse = m.rmse_px;
+  const samPass = sam!=null && sam < 3;
+  const ndviPass = ndvi!=null && ndvi > 0.98;
+  const rmsePass = rmse!=null && rmse < 0.3;
+  $('proof').innerHTML = `
+    <div class="proof ${sam==null?'':samPass?'pass':'fail'}"><b>${sam??'â€”'}Â°</b>SAM &lt;3Â° ${sam==null?'':samPass?'âœ“':'âœ—'}<br><small>spectral</small></div>
+    <div class="proof ${ndvi==null?'':ndviPass?'pass':'fail'}"><b>${ndvi??'â€”'}</b>NDVI r &gt;0.98 ${ndvi==null?'':ndviPass?'âœ“':'âœ—'}<br><small>vegetation</small></div>
+    <div class="proof ${rmse==null?'':rmsePass?'pass':'fail'}"><b>${rmse??'â€”'} px</b>RMSE &lt;0.3px ${rmse==null?'':rmsePass?'âœ“':'âœ—'}<br><small>geospatial</small></div>
+  `;
+}
+
+async function upload(){
+  const f=$('file').files[0];
+  if(!f){ setStatus('Pick a file first',true); return; }
+  if(f.size>50*1024*1024){ setStatus('Max 50MB',true); return; }
+  const fd=new FormData(); fd.append('file',f);
+  setStatus('Processingâ€¦');
+  try{
+    const r=await fetch('/api/infer',{method:'POST',body:fd});
+    const j=await r.json();
+    if(!j.success){ setStatus(j.error,true); return; }
+    setStatus('Done');
+    $('results').style.display='block';
+    $('img-input').src=j.images.input; $('c-input').src=j.images.input;
+    $('img-sr').src=j.images.sr; $('c-sr').src=j.images.sr;
+    $('img-heat').src=j.images.heatmap; $('c-heat').src=j.images.heatmap;
+    $('meta').textContent=JSON.stringify(j.meta,null,2);
+    $('metrics').textContent=JSON.stringify(j.metrics,null,2);
+    renderProof(j);
+    onSlider(slider.value);
+    window.scrollTo({top: $('results').offsetTop, behavior:'smooth'});
+  }catch(e){ setStatus('Failed: '+e,true); }
+}
+
+function onSlider(v){
+  const p=Number(v);
+  valEl.textContent=p+'%';
+  $('c-input').style.clipPath=`inset(0 ${100-p}% 0 0)`;
+  $('c-heat').style.clipPath=`inset(0 0 0 ${p}% 0)`;
+  $('handle').style.left=p+'%';
+}
+slider.addEventListener('input', e=> onSlider(e.target.value));
+
+const drop=$('drop');
+drop.addEventListener('dragover', e=>{e.preventDefault(); drop.style.background='#eef4ff'});
+drop.addEventListener('dragleave', ()=> drop.style.background='');
+drop.addEventListener('drop', e=>{
+  e.preventDefault(); drop.style.background='';
+  if(e.dataTransfer.files.length){ $('file').files=e.dataTransfer.files; upload(); }
+});
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Resolvance â€” Basic</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<header>
+  <h1>Resolvance</h1>
+  <p>SIH26142 â€¢ 10m Sentinel-2 â†’ 3.3m SR â€¢ Basic Demo</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Upload</h2>
+    <p class="muted">Supports .tif/.tiff/.png/.jpg (â‰¤50MB) â€¢ 1/3/4/8-band auto-detect</p>
+    <div id="drop" class="drop">
+      <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg">
+      <button onclick="upload()">Run 3Ã— Super-Resolution</button>
+      <span id="status" class="status"></span>
+    </div>
+  </section>
+
+  <section id="results" class="card" style="display:none">
+    <h2>2. Results</h2>
+    <div class="images">
+      <div><h3>Input (10m)</h3><img id="img-input"></div>
+      <div><h3>SR (3.3m)</h3><img id="img-sr"></div>
+      <div><h3>Heatmap</h3><img id="img-heat"></div>
+    </div>
+
+    <label class="slider-label">Compare: <input type="range" id="slider" min="0" max="100" value="50"> <span id="slider-val">50%</span></label>
+    <div class="preview-compare">
+      <div class="compare" id="compare">
+        <img id="c-input"><img id="c-sr"><img id="c-heat">
+        <div id="handle" class="handle"></div>
+      </div>
+    </div>
+
+    <!-- Telemetry + Downloads -->
+    <div class="two">
+      <div>
+        <h3>Telemetry</h3>
+        <pre id="meta"></pre>
+        <div id="crs-card" class="proof-card"></div>
+        <div id="downloads" class="downloads"></div>
+      </div>
+      <div>
+        <h3>Metrics</h3>
+        <pre id="metrics"></pre>
+        <div id="proof" class="proof-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Direct Proof for Judge</h2>
+    <ul class="info">
+      <li><b>CRS:</b> Viewer shows <code>meta crs EPSG:32643</code> + <code>download_tif</code> COG â†’ open in QGIS â†’ overlay check</li>
+      <li><b>SAM:</b> <code>sam_mean_deg</code> &lt;3Â° proves spectral (no NIR strip)</li>
+      <li><b>NDVI:</b> <code>ndvi_corr</code> &gt;0.98 proves vegetation index intact</li>
+      <li><b>RMSE:</b> <code>rmse_px</code> &lt;0.3px proves Affine.scale geospatial fidelity</li>
+      <li><b>API:</b> <code>POST /api/infer</code> multipart <code>file</code> â€¢ <code>GET /api/health</code></li>
+    </ul>
+  </section>
+</main>
+
+<footer>Resolvance â€¢ SIH26142 NTRO â€¢ Basic UI â€¢ Flask</footer>
+<script src="/static/js/app.js"></script>
+</body>
+</html>
