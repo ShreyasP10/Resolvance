@@ -1,8 +1,0 @@
-flask
-flask-cors
-opencv-python-headless
-numpy
-tifffile
-affine
-pillow
-gunicorn
