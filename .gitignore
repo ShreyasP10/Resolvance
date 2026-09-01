@@ -1,9 +1,60 @@
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Virtual environments
 venv/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Uploads (temp files)
 uploads/*
 !uploads/.gitkeep
+
+# Generated results
 static/results/*
 !static/results/.gitkeep
+
+# Model weights (large files)
 weights/*.pth
-.env
+weights/*.pt
+weights/*.onnx
+
+# Sample data (large files - tracked via Git LFS or regenerated)
+# sample/*.tif
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Vercel
+.vercel
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
