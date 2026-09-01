@@ -1,81 +1,178 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Resolvance — Basic</title>
+<title>Resolvance — SIH26142 Sentinel-SRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-<header>
-  <h1>Resolvance</h1>
-  <p>SIH26142 • 10m Sentinel-2 → 3.3m SR • Basic Demo</p>
+<header class="hdr">
+  <div class="hdr-inner">
+    <div class="logo">⬢ Resolvance</div>
+    <nav>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#demo">Demo</a>
+      <a href="#proof">Proof</a>
+    </nav>
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">🌙</button>
+  </div>
 </header>
 
 <main>
-  <section class="card">
-    <h2>1. Upload</h2>
-    <p class="muted">Supports .tif/.tiff/.png/.jpg (≤50MB) • 1/3/4/8-band auto-detect</p>
-    <div id="drop" class="drop">
-      <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg">
-      <button onclick="upload()">Run 3× Super-Resolution</button>
-      <span id="status" class="status"></span>
+  <!-- Hero Section -->
+  <section class="hero" id="hero">
+    <canvas id="particles" aria-hidden="true"></canvas>
+    <div class="hero-content">
+      <h1>10m Sentinel-2 → <span class="accent">3.3m</span> Super-Resolution</h1>
+      <p>Sovereign N-channel SR with spectral SAM guard & per-pixel uncertainty — QGIS-ready COG output.</p>
+      <div class="kpi">
+        <span>PSNR ≥28</span>
+        <span>SAM <3°</span>
+        <span>NDVI r>0.98</span>
+        <span>RMSE <0.3px</span>
+        <span>≤30s CPU</span>
+      </div>
     </div>
   </section>
 
-  <section id="results" class="card" style="display:none">
-    <h2>2. Results</h2>
-    <div class="images">
-      <div><h3>Input (10m)</h3><img id="img-input"></div>
-      <div><h3>SR (3.3m)</h3><img id="img-sr"></div>
-      <div><h3>Heatmap</h3><img id="img-heat"></div>
+  <!-- Pipeline Overview -->
+  <section id="pipeline" class="pipeline card">
+    <h2>Pipeline: Ingest → SR → Uncertainty → Export</h2>
+    <div class="flow">
+      <div class="node cream"><b>01 Ingest</b><br>N-band GeoTIFF + CRS Affine<br><code>core/io.py</code></div>
+      <div class="arrow">→</div>
+      <div class="node cream"><b>02 Tile</b><br>256×256+16 Gaussian blend<br>no seams</div>
+      <div class="arrow">→</div>
+      <div class="node cream2"><b>03 SR 3×</b><br>N-ch ESRGAN/SwinIR<br><code>L1+Perceptual+SAM</code></div>
+      <div class="arrow">→</div>
+      <div class="node grey"><b>04 Uncertainty</b><br>MC-Dropout T=10 viridis<br>threshold 0.6 red</div>
+      <div class="arrow">→</div>
+      <div class="node white"><b>05 Export</b><br>COG planar + PNG data URI<br>QGIS overlay</div>
+    </div>
+  </section>
+
+  <!-- Demo Upload -->
+  <section id="demo" class="card">
+    <h2>Demo — Upload 10m GeoTIFF</h2>
+    <div id="drop" class="drop" role="button" tabindex="0" aria-label="Drop zone for GeoTIFF upload">
+      <div class="drop-content">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 8v13"/></svg>
+        <p class="drop-text"><b>Drag & drop</b> 4-band <code>.tif</code> (≤50MB) or click to browse</p>
+        <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg" hidden>
+        <button class="btn primary" id="browse-btn" onclick="document.getElementById('file').click()">Browse</button>
+        <span id="status" class="status" aria-live="polite"></span>
+      </div>
+      <div id="progress" class="progress" hidden><div class="bar"></div><span class="progress-text">0%</span></div>
+    </div>
+  </section>
+
+  <!-- Results Section -->
+  <section id="results" class="card" hidden>
+    <div class="results-header">
+      <h2>Results — 4-Layer Viewer</h2>
+      <div class="header-actions">
+        <button class="btn secondary" id="fullscreen-btn" title="Fullscreen">⛶</button>
+      </div>
     </div>
 
-    <label class="slider-label">
-      Compare Input with:
-      <select id="right-layer" onchange="updateLayers()">
-        <option value="sr">SR (3.3m)</option>
-        <option value="heat">Heatmap</option>
-      </select>
-      <input type="range" id="slider" min="0" max="100" value="50"> 
-      <span id="slider-val">50%</span>
-    </label>
-    <div class="preview-compare">
+    <!-- Leaflet Map Container -->
+    <div class="map-grid">
+      <div class="map-panel">
+        <div class="map-header">
+          <h3>Input (10m)</h3>
+          <select id="layer-input" class="layer-select" aria-label="Input layer">
+            <option value="rgb">RGB</option>
+            <option value="nir">NIR</option>
+            <option value="ndvi">NDVI</option>
+          </select>
+        </h3>
+        <div id="map-input" class="leaflet-map" aria-label="Input map"></div>
+      </div>
+      <div class="map-panel">
+        <div class="map-header">
+          <h3>SR (3.3m)</h3>
+          <select id="layer-sr" class="layer-select" aria-label="SR layer">
+            <option value="rgb">RGB</option>
+            <option value="nir">NIR</option>
+            <option value="ndvi">NDVI</option>
+          </select>
+        </h3>
+        <div id="map-sr" class="leaflet-map" aria-label="SR map"></div>
+      </div>
+      <div class="map-panel">
+        <div class="map-header">
+          <h3>Heatmap</h3>
+          <div class="legend-mini" id="legend-mini"></div>
+        </h3>
+        <div id="map-heat" class="leaflet-map" aria-label="Heatmap"></div>
+      </div>
+      <div class="map-panel">
+        <div class="map-header">
+          <h3>Diff</h3>
+          <span class="diff-badge" id="diff-stats"></span>
+        </h3>
+        <div id="map-diff" class="leaflet-map" aria-label="Difference map"></div>
+      </div>
+    </div>
+
+    <!-- Comparison Slider (fallback for non-map view) -->
+    <div class="compare-section">
+      <label class="slider-label">
+        Compare: 
+        <select id="compare-mode" onchange="updateCompareMode()">
+          <option value="input-sr">Input ↔ SR</option>
+          <option value="input-heat">Input ↔ Heatmap</option>
+          <option value="sr-diff">SR ↔ Diff</option>
+        </select>
+        <input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider">
+        <span id="slider-val">50%</span>
+      </label>
       <div class="compare" id="compare">
-        <img id="c-right">
-        <img id="c-input">
-        <div id="handle" class="handle"></div>
+        <img id="c-left" alt="Left layer">
+        <img id="c-right" alt="Right layer">
+        <div class="handle" id="handle" role="slider" aria-label="Comparison slider" tabindex="0"></div>
       </div>
     </div>
 
-    <!-- Telemetry + Downloads -->
+    <!-- Telemetry + Metrics + Proof -->
     <div class="two">
-      <div>
+      <div class="panel">
         <h3>Telemetry</h3>
-        <pre id="meta"></pre>
+        <pre id="meta" aria-label="Telemetry metadata"></pre>
         <div id="crs-card" class="proof-card"></div>
-        <div id="downloads" class="downloads"></div>
       </div>
-      <div>
-        <h3>Metrics</h3>
-        <pre id="metrics"></pre>
+      <div class="panel">
+        <h3>Metrics & Proof</h3>
+        <pre id="metrics" aria-label="Metrics"></pre>
         <div id="proof" class="proof-grid"></div>
       </div>
     </div>
+
+    <!-- Downloads -->
+    <div id="downloads" class="downloads"></div>
   </section>
 
-  <section class="card">
-    <h2>3. Direct Proof for Judge</h2>
+  <!-- Proof Section -->
+  <section id="proof" class="card">
+    <h2>Direct Proof for Judge</h2>
     <ul class="info">
       <li><b>CRS:</b> Viewer shows <code>meta crs EPSG:32643</code> + <code>download_tif</code> COG → open in QGIS → overlay check</li>
-      <li><b>SAM:</b> <code>sam_mean_deg</code> &lt;3° proves spectral (no NIR strip)</li>
-      <li><b>NDVI:</b> <code>ndvi_corr</code> &gt;0.98 proves vegetation index intact</li>
-      <li><b>RMSE:</b> <code>rmse_px</code> &lt;0.3px proves Affine.scale geospatial fidelity</li>
+      <li><b>SAM:</b> <code>sam_mean_deg</code> <3° proves spectral (no NIR strip)</li>
+      <li><b>NDVI:</b> <code>ndvi_corr</code> >0.98 proves vegetation index intact</li>
+      <li><b>RMSE:</b> <code>rmse_px</code> <0.3px proves Affine.scale geospatial fidelity</li>
       <li><b>API:</b> <code>POST /api/infer</code> multipart <code>file</code> • <code>GET /api/health</code></li>
     </ul>
   </section>
 </main>
 
-<footer>Resolvance • SIH26142 NTRO • Basic UI • Flask</footer>
+<footer>Resolvance • SIH26142 NTRO • Team Antariksh Setu</footer>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="/static/js/app.js"></script>
 </body>
 </html>
