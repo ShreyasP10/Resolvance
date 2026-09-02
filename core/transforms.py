@@ -1,5 +1,5 @@
-"""SRModel N-ch per UPDATED_SIH26142_FULL_v2.md:12 - stub + torch fallback"""
 from __future__ import annotations
+import os
 import cv2
 import numpy as np
 from typing import Optional
@@ -13,6 +13,7 @@ class SRModel:
         arch: str = "real_esrgan",
         device: str = "cpu",
         dropout_p: float = 0.2,
+        weights_path: Optional[str] = None,
     ):
         self.in_ch = in_ch
         self.out_ch = out_ch
@@ -22,6 +23,21 @@ class SRModel:
         try:
             import torch
             self.torch = torch
+            from .ml_models import NChannelRRDBNet
+            # Initialize real model
+            model = NChannelRRDBNet(in_nc=in_ch, out_nc=out_ch, scale=scale, dropout_p=dropout_p)
+            model = model.to(device)
+            
+            # Load weights if available
+            if weights_path and os.path.exists(weights_path):
+                model.load_state_dict(torch.load(weights_path, map_location=device))
+                model.eval()
+                self.model = model
+            else:
+                # If no weights exist, we keep self.model = None to fallback to bicubic
+                # to prevent garbage noise output.
+                pass
+                
         except Exception:
             self.torch = None
 
@@ -56,6 +72,29 @@ def uncertainty(img: np.ndarray, model: Optional[SRModel] = None, T: int = 10) -
         img = img[np.newaxis, :, :]
     if model is None:
         model = SRModel(in_ch=img.shape[0])
+    
+    # Real MC-Dropout implementation if model is loaded
+    if model.model is not None:
+        import torch
+        t = torch.from_numpy(img).float().div(255).unsqueeze(0).to(model.device)
+        # Enable dropout during inference
+        model.model.train() 
+        preds = []
+        with torch.no_grad():
+            for _ in range(T):
+                preds.append(model.model(t))
+        # preds: List of BxCxHxW
+        stacked = torch.stack(preds) # TxBxCxHxW
+        # Calculate per-pixel standard deviation across T passes
+        std = torch.std(stacked, dim=0) # BxCxHxW
+        std_mean = std.squeeze(0).mean(dim=0).cpu().numpy() # HxW
+        model.model.eval() # restore eval mode
+        
+        # Normalize to 0-255 heatmap
+        heat = (std_mean - std_mean.min()) / (std_mean.ptp() + 1e-6)
+        return (heat * 255).astype(np.uint8)
+
+    # Fallback simulated uncertainty (if no weights loaded or no torch)
     gray = img.mean(axis=0).astype(np.uint8)
     edges = cv2.Laplacian(gray, cv2.CV_32F)
     edges = np.abs(edges)
