@@ -12,13 +12,22 @@
 <body>
 <header class="hdr">
   <div class="hdr-inner">
-    <div class="logo">⬢ Resolvance</div>
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+      <span>Resolvance</span>
+    </div>
     <nav>
       <a href="#pipeline">Pipeline</a>
       <a href="#demo">Demo</a>
       <a href="#proof">Proof</a>
     </nav>
-    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">🌙</button>
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+      <span class="theme-icon-light">🌙</span>
+      <span class="theme-icon-dark">☀️</span>
+    </button>
   </div>
 </header>
 
@@ -27,46 +36,92 @@
   <section class="hero" id="hero">
     <canvas id="particles" aria-hidden="true"></canvas>
     <div class="hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        <span>SIH26142</span>
+        <span>NTRO</span>
+      </div>
       <h1>10m Sentinel-2 → <span class="accent">3.3m</span> Super-Resolution</h1>
       <p>Sovereign N-channel SR with spectral SAM guard & per-pixel uncertainty — QGIS-ready COG output.</p>
       <div class="kpi">
-        <span>PSNR ≥28</span>
-        <span>SAM <3°</span>
-        <span>NDVI r>0.98</span>
-        <span>RMSE <0.3px</span>
-        <span>≤30s CPU</span>
+        <span class="kpi-item"><b>PSNR ≥28</b><span>Quality</span></span>
+        <span class="kpi-item"><b>SAM <3°</b><span>Spectral</span></span>
+        <span class="kpi-item"><b>NDVI r>0.98</b><span>Vegetation</span></span>
+        <span class="kpi-item"><b>RMSE <0.3px</b><span>Geo</span></span>
+        <span class="kpi-item"><b>≤30s CPU</b><span>Speed</span></span>
       </div>
     </div>
   </section>
 
   <!-- Pipeline Overview -->
   <section id="pipeline" class="pipeline card">
-    <h2>Pipeline: Ingest → SR → Uncertainty → Export</h2>
+    <div class="card-header">
+      <h2>Pipeline: Ingest → SR → Uncertainty → Export</h2>
+      <span class="card-subtitle">End-to-end geospatial AI pipeline</span>
+    </h2>
     <div class="flow">
-      <div class="node cream"><b>01 Ingest</b><br>N-band GeoTIFF + CRS Affine<br><code>core/io.py</code></div>
-      <div class="arrow">→</div>
-      <div class="node cream"><b>02 Tile</b><br>256×256+16 Gaussian blend<br>no seams</div>
-      <div class="arrow">→</div>
-      <div class="node cream2"><b>03 SR 3×</b><br>N-ch ESRGAN/SwinIR<br><code>L1+Perceptual+SAM</code></div>
-      <div class="arrow">→</div>
-      <div class="node grey"><b>04 Uncertainty</b><br>MC-Dropout T=10 viridis<br>threshold 0.6 red</div>
-      <div class="arrow">→</div>
-      <div class="node white"><b>05 Export</b><br>COG planar + PNG data URI<br>QGIS overlay</div>
+      <div class="node cream">
+        <span class="node-num">01</span>
+        <b>Ingest</b>
+        <p>N-band GeoTIFF + CRS Affine</p>
+        <code>core/io.py</code>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M19 12l-4-4M19 12l-4 4"/></svg></div>
+      <div class="node cream">
+        <span class="node-num">02</span>
+        <b>Tile</b>
+        <p>256×256+16 Gaussian blend</p>
+        <span>no seams</span>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M19 12l-4-4M19 12l-4 4"/></svg></div>
+      <div class="node cream2">
+        <span class="node-num">03</span>
+        <b>SR 3×</b>
+        <p>N-ch ESRGAN/SwinIR</p>
+        <code>L1+Perceptual+SAM</code>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M19 12l-4-4M19 12l-4 4"/></svg></div>
+      <div class="node grey">
+        <span class="node-num">04</span>
+        <b>Uncertainty</b>
+        <p>MC-Dropout T=10 viridis</p>
+        <span>threshold 0.6 red</span>
+      </div>
+      <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M19 12l-4-4M19 12l-4 4"/></svg></div>
+      <div class="node white">
+        <span class="node-num">05</span>
+        <b>Export</b>
+        <p>COG planar + PNG data URI</p>
+        <span>QGIS overlay</span>
+      </div>
     </div>
   </section>
 
   <!-- Demo Upload -->
   <section id="demo" class="card">
-    <h2>Demo — Upload 10m GeoTIFF</h2>
+    <div class="card-header">
+      <h2>Demo — Upload 10m GeoTIFF</h2>
+      <span class="card-subtitle">Drag & drop or click to browse</span>
+    </div>
     <div id="drop" class="drop" role="button" tabindex="0" aria-label="Drop zone for GeoTIFF upload">
       <div class="drop-content">
-        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 8v13"/></svg>
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 8v13"/>
+        </svg>
         <p class="drop-text"><b>Drag & drop</b> 4-band <code>.tif</code> (≤50MB) or click to browse</p>
         <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg" hidden>
-        <button class="btn primary" id="browse-btn" onclick="document.getElementById('file').click()">Browse</button>
+        <button class="btn primary" id="browse-btn" onclick="document.getElementById('file').click()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 8v13"/>
+          </svg>
+          <span>Browse</span>
+        </button>
         <span id="status" class="status" aria-live="polite"></span>
       </div>
-      <div id="progress" class="progress" hidden><div class="bar"></div><span class="progress-text">0%</span></div>
+      <div id="progress" class="progress" hidden>
+        <div class="bar"></div>
+        <span class="progress-text">0%</span>
+      </div>
     </div>
   </section>
 
@@ -75,7 +130,9 @@
     <div class="results-header">
       <h2>Results — 4-Layer Viewer</h2>
       <div class="header-actions">
-        <button class="btn secondary" id="fullscreen-btn" title="Fullscreen">⛶</button>
+        <button class="btn secondary" id="fullscreen-btn" title="Fullscreen">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2H8M3 16v3a2 2 0 0 0 2 2h3M16 21v-3a2 2 0 0 0-2-2h-3"/></svg>
+        </button>
       </div>
     </div>
 
@@ -89,7 +146,7 @@
             <option value="nir">NIR</option>
             <option value="ndvi">NDVI</option>
           </select>
-        </h3>
+        </div>
         <div id="map-input" class="leaflet-map" aria-label="Input map"></div>
       </div>
       <div class="map-panel">
@@ -100,21 +157,21 @@
             <option value="nir">NIR</option>
             <option value="ndvi">NDVI</option>
           </select>
-        </h3>
+        </div>
         <div id="map-sr" class="leaflet-map" aria-label="SR map"></div>
       </div>
       <div class="map-panel">
         <div class="map-header">
           <h3>Heatmap</h3>
           <div class="legend-mini" id="legend-mini"></div>
-        </h3>
+        </div>
         <div id="map-heat" class="leaflet-map" aria-label="Heatmap"></div>
       </div>
       <div class="map-panel">
         <div class="map-header">
           <h3>Diff</h3>
           <span class="diff-badge" id="diff-stats"></span>
-        </h3>
+        </div>
         <div id="map-diff" class="leaflet-map" aria-label="Difference map"></div>
       </div>
     </div>
@@ -122,16 +179,16 @@
     <!-- Comparison Slider (fallback for non-map view) -->
     <div class="compare-section">
       <label class="slider-label">
-        Compare: 
-        <select id="compare-mode" onchange="updateCompareMode()">
+        <span>Compare:</span>
+        <select id="compare-mode" onchange="updateCompareMode()" aria-label="Comparison mode">
           <option value="input-sr">Input ↔ SR</option>
           <option value="input-heat">Input ↔ Heatmap</option>
           <option value="sr-diff">SR ↔ Diff</option>
         </select>
-        <input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider">
+        <input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">
         <span id="slider-val">50%</span>
       </label>
-      <div class="compare" id="compare">
+      <div class="compare" id="compare" role="img" aria-label="Comparison view">
         <img id="c-left" alt="Left layer">
         <img id="c-right" alt="Right layer">
         <div class="handle" id="handle" role="slider" aria-label="Comparison slider" tabindex="0"></div>
@@ -158,7 +215,10 @@
 
   <!-- Proof Section -->
   <section id="proof" class="card">
-    <h2>Direct Proof for Judge</h2>
+    <div class="card-header">
+      <h2>Direct Proof for Judge</h2>
+      <span class="card-subtitle">Verifiable metrics & geospatial integrity</span>
+    </div>
     <ul class="info">
       <li><b>CRS:</b> Viewer shows <code>meta crs EPSG:32643</code> + <code>download_tif</code> COG → open in QGIS → overlay check</li>
       <li><b>SAM:</b> <code>sam_mean_deg</code> <3° proves spectral (no NIR strip)</li>
@@ -169,7 +229,24 @@
   </section>
 </main>
 
-<footer>Resolvance • SIH26142 NTRO • Team Antariksh Setu</footer>
+<footer>
+  <div class="footer-content">
+    <div class="footer-brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5"/>
+        <path d="M2 12l10 5 10-5"/>
+      </svg>
+      <span>Resolvance</span>
+    </div>
+    <div class="footer-links">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#demo">Demo</a>
+      <a href="#proof">Proof</a>
+      <a href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener">GitHub</a>
+    </div>
+    <p class="footer-copy">SIH26142 NTRO • Team Antariksh Setu</p>
+  </div>
+</footer>
 
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
