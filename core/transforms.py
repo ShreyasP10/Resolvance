@@ -13,7 +13,7 @@ class SRModel:
         arch: str = "real_esrgan",
         device: str = "cpu",
         dropout_p: float = 0.2,
-        weights_path: Optional[str] = None,
+        weights_path: Optional[str] = "weights/real_esrgan_4ch.pth",
     ):
         self.in_ch = in_ch
         self.out_ch = out_ch
@@ -30,16 +30,19 @@ class SRModel:
             
             # Load weights if available
             if weights_path and os.path.exists(weights_path):
-                model.load_state_dict(torch.load(weights_path, map_location=device))
-                model.eval()
-                self.model = model
+                if in_ch == 4:
+                    model.load_state_dict(torch.load(weights_path, map_location=device))
+                    model.eval()
+                    self.model = model
+                    print(f"✅ Successfully loaded AI weights from {weights_path} (4-channels)")
+                else:
+                    print(f"⚠️ Warning: Uploaded {in_ch}-channel image, but weights are for 4-channels. Falling back to bicubic.")
             else:
-                # If no weights exist, we keep self.model = None to fallback to bicubic
-                # to prevent garbage noise output.
-                pass
-                
-        except Exception:
-            self.torch = None
+                print(f"ℹ️ No weights found at {weights_path}. Falling back to bicubic.")
+        except ImportError:
+            print("❌ PyTorch is not installed locally! Run 'pip install torch' to use the AI model. Falling back to bicubic.")
+        except Exception as e:
+            print(f"❌ Failed to load PyTorch model: {e}. Falling back to bicubic.")
 
     def _bicubic(self, x: np.ndarray) -> np.ndarray:
         C, H, W = x.shape
