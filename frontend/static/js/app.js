@@ -261,16 +261,19 @@ async function upload() {
   
   const fd = new FormData();
   fd.append('file', f);
-  setStatus('Processing…');
+  setStatus('Uploading & Processing AI (This takes a minute on CPU)...');
   showProgress(true, 10);
   
+  // Fake progress ticking for CPU processing so user knows it hasn't hung
+  let aiPct = 10;
+  const aiInterval = setInterval(() => {
+    aiPct += (90 - aiPct) * 0.05;
+    showProgress(true, aiPct);
+  }, 1000);
+
   try {
-    const xhr = new XMLHttpRequest();
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable) showProgress(true, (e.loaded / e.total) * 90);
-    });
-    
     const response = await fetch('/api/infer', { method: 'POST', body: fd });
+    clearInterval(aiInterval);
     showProgress(true, 95);
     const j = await response.json();
     showProgress(false);
@@ -320,6 +323,9 @@ drop.addEventListener('drop', e => {
 });
 
 drop.addEventListener('click', e => { if (e.target === drop || e.target.classList.contains('drop-content') || e.target.classList.contains('drop-icon') || e.target.classList.contains('drop-text')) $('file').click(); });
+
+// Trigger the upload when the user selects a file from the file picker
+$('file').addEventListener('change', upload);
 
 // Fullscreen
 fullscreenBtn?.addEventListener('click', () => {

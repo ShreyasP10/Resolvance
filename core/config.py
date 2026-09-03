@@ -32,7 +32,7 @@ class Settings:
     device: str = "cpu"
     model_name: str = "real_esrgan_4ch"
     dropout_p: float = 0.2
-    mc_passes: int = 10
+    mc_passes: int = 3
     test_mode: bool = False
     allowed_extensions: frozenset = frozenset({".tif",".tiff",".png",".jpg",".jpeg"})
     geotiff_extensions: frozenset = frozenset({".tif",".tiff"})
