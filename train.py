@@ -20,8 +20,9 @@ class SelfSupervisedDegradationDataset(Dataset):
     def __init__(self, data_dir, patch_size=256, scale=3, in_nc=4):
         self.data_dir = Path(data_dir)
         self.files = list(self.data_dir.glob("*.tif")) + list(self.data_dir.glob("*.png"))
-        self.patch_size = patch_size
         self.scale = scale
+        # Ensure patch_size is perfectly divisible by scale so SR spatial dims match HR dims
+        self.patch_size = patch_size - (patch_size % scale) 
         self.in_nc = in_nc
         
         # Load everything into memory for fast hackathon training, or load lazily.
