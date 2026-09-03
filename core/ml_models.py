@@ -83,7 +83,9 @@ def sam_loss(output, target):
     norm_out = torch.norm(output, dim=1)
     norm_tar = torch.norm(target, dim=1)
     # Add epsilon to avoid division by zero
-    sam = torch.acos(torch.clamp(dot / (norm_out * norm_tar + 1e-8), -1.0, 1.0))
+    # Clamp slightly inside [-1, 1] because acos derivative is infinite at exactly -1 and 1
+    cosine = torch.clamp(dot / (norm_out * norm_tar + 1e-8), -1.0 + 1e-7, 1.0 - 1e-7)
+    sam = torch.acos(cosine)
     return sam.mean()
 
 class CombinedSRLoss(nn.Module):
