@@ -66,7 +66,15 @@ class SelfSupervisedDegradationDataset(Dataset):
             if img.ndim == 2: img = img[np.newaxis, :, :]
             C, H, W = img.shape
             
-            # Pad if too small
+            # Channel padding (Fix for the tensor size mismatch error)
+            if C < self.in_nc:
+                # Pad missing channels with 0s
+                img = np.pad(img, ((0, self.in_nc - C), (0, 0), (0, 0)), mode='constant')
+            elif C > self.in_nc:
+                # Truncate extra channels
+                img = img[:self.in_nc]
+                
+            # Pad spatially if too small
             if H < self.patch_size or W < self.patch_size:
                 img = np.pad(img, ((0,0), (0, max(0, self.patch_size - H)), (0, max(0, self.patch_size - W))), mode='reflect')
                 H, W = img.shape[1:]
@@ -74,7 +82,7 @@ class SelfSupervisedDegradationDataset(Dataset):
             # Random crop
             y = random.randint(0, H - self.patch_size)
             x = random.randint(0, W - self.patch_size)
-            hr_crop = img[:self.in_nc, y:y+self.patch_size, x:x+self.patch_size].astype(np.float32) / 255.0
+            hr_crop = img[:, y:y+self.patch_size, x:x+self.patch_size].astype(np.float32) / 255.0
             
             # Data augmentation (flip/rotate)
             if random.random() > 0.5:
