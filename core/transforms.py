@@ -34,15 +34,15 @@ class SRModel:
                     model.load_state_dict(torch.load(weights_path, map_location=device))
                     model.eval()
                     self.model = model
-                    print(f"✅ Successfully loaded AI weights from {weights_path} (4-channels)")
+                    print(f"SUCCESS: Successfully loaded AI weights from {weights_path} (4-channels)")
                 else:
-                    print(f"⚠️ Warning: Uploaded {in_ch}-channel image, but weights are for 4-channels. Falling back to bicubic.")
+                    print(f"WARNING: Uploaded {in_ch}-channel image, but weights are for 4-channels. Falling back to bicubic.")
             else:
-                print(f"ℹ️ No weights found at {weights_path}. Falling back to bicubic.")
+                print(f"INFO: No weights found at {weights_path}. Falling back to bicubic.")
         except ImportError:
-            print("❌ PyTorch is not installed locally! Run 'pip install torch' to use the AI model. Falling back to bicubic.")
+            print("ERROR: PyTorch is not installed locally! Run 'pip install torch' to use the AI model. Falling back to bicubic.")
         except Exception as e:
-            print(f"❌ Failed to load PyTorch model: {e}. Falling back to bicubic.")
+            print(f"ERROR: Failed to load PyTorch model: {e}. Falling back to bicubic.")
 
     def _bicubic(self, x: np.ndarray) -> np.ndarray:
         C, H, W = x.shape
@@ -94,7 +94,7 @@ def uncertainty(img: np.ndarray, model: Optional[SRModel] = None, T: int = 10) -
         model.model.eval() # restore eval mode
         
         # Normalize to 0-255 heatmap
-        heat = (std_mean - std_mean.min()) / (std_mean.ptp() + 1e-6)
+        heat = (std_mean - std_mean.min()) / (np.ptp(std_mean) + 1e-6)
         return (heat * 255).astype(np.uint8)
 
     # Fallback simulated uncertainty (if no weights loaded or no torch)

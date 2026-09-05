@@ -2,8 +2,8 @@
 const $ = id => document.getElementById(id);
 const statusEl = $('status'), slider = $('slider'), valEl = $('slider-val');
 const progressEl = $('progress'), progressBar = document.querySelector('.bar'), progressText = document.querySelector('.progress-text');
-const themeToggle = $('#theme-toggle');
-const fullscreenBtn = $('#fullscreen-btn');
+const themeToggle = $('theme-toggle');
+const fullscreenBtn = $('fullscreen-btn');
 
 // --- Theme ---
 const THEME_KEY = 'resolvance-theme';
