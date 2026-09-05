@@ -37,7 +37,7 @@ function showProgress(show, percent = 0) {
 function escapeHTML(str) {
   if (typeof str !== 'string') return str;
   return str.replace(/[&<>'"]/g, tag => ({
-    '&': '&', '<': '<', '>': '>', "'": ''', '"': '"'
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   }[tag]));
 }
 
@@ -130,7 +130,8 @@ function addImageOverlays(images) {
       ['rgb', 'nir', 'ndvi'].forEach(l => {
         if (mapLayers[id][l]) maps[id].removeLayer(mapLayers[id][l]);
       });
-    });
+    }
+  });
 
   // Add new overlays
   if (images.input) {
