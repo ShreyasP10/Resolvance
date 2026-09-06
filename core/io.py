@@ -126,9 +126,9 @@ def write_png(path: Path, arr: np.ndarray):
             rgb = arr.transpose(1,2,0)
             img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
         elif arr.shape[0] >= 4:
-            # 4/8-band: preview first 3 bands
-            rgb = arr[:3].transpose(1,2,0)
-            img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            # Sentinel-2 4-band is B, G, R, NIR. arr[:3] is B, G, R. OpenCV expects BGR!
+            # No cvtColor needed if it's already BGR
+            img = arr[:3].transpose(1,2,0)
         else:
             # generic C x H x W -> take mean for preview
             img = arr.mean(axis=0).astype(np.uint8)

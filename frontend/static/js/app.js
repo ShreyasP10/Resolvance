@@ -116,8 +116,18 @@ function switchMapLayer(mapId, layerType) {
 }
 
 function getImageBounds() {
-  // Mumbai area approximate bounds
-  return [[18.9, 72.5], [19.3, 73.1]];
+  let aspect = 1.0;
+  if (currentMeta && currentMeta.input_size) {
+    const parts = currentMeta.input_size.split('x');
+    if (parts.length === 2) {
+      const w = parseInt(parts[0]);
+      const h = parseInt(parts[1]);
+      if (h > 0) aspect = w / h;
+    }
+  }
+  const dLat = 0.4;
+  const dLon = dLat * aspect / 0.945;
+  return [[18.9, 72.5], [18.9 + dLat, 72.5 + dLon]];
 }
 
 function addImageOverlays(images) {
@@ -284,6 +294,7 @@ async function upload() {
     setStatus('Done');
     $('results').hidden = false;
     currentImages = j.images;
+    currentMeta = j.meta;
     
     // Initialize maps and add overlays
     addImageOverlays(j.images);
