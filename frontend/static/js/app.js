@@ -285,11 +285,6 @@ async function upload() {
     $('results').hidden = false;
     currentImages = j.images;
     
-    // Update static images
-    $('img-input').src = j.images.input;
-    $('img-sr').src = j.images.sr;
-    $('img-heat').src = j.images.heatmap;
-    
     // Initialize maps and add overlays
     addImageOverlays(j.images);
     
