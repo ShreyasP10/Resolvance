@@ -1,8 +1,10 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Resolvance — Sovereign Super-Resolution • SIH26142</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Resolvance — Sovereign 10m Sentinel-2 → 3.3m super-resolution for SIH26142 NTRO. Spectral SAM guard + uncertainty heatmap + QGIS COG.">
+<meta name="theme-color" content="#0f2040">
+<title>Resolvance — SIH26142 • Sovereign Super-Resolution</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -10,78 +12,87 @@
 <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-<header class="hdr">
+<header class="hdr" role="banner">
   <div class="hdr-inner">
-    <div class="logo">
-      <div class="logo-mark">⬢</div>
-      <div class="logo-text"><b>Resolvance</b><span>SIH26142 • NTRO</span></div>
-    </div>
-    <nav>
+    <a class="logo" href="#" aria-label="Resolvance home">
+      <span class="logo-mark" aria-hidden="true">⬢</span>
+      <span class="logo-text"><b>Resolvance</b><span>SIH26142 • NTRO</span></span>
+    </a>
+    <nav aria-label="Primary">
       <a href="#pipeline">Pipeline</a>
       <a href="#demo">Demo</a>
       <a href="#results">Results</a>
+      <a href="#proof">Proof</a>
     </nav>
     <div class="hdr-actions">
-      <a class="hdr-gh" href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener">GitHub</a>
-      <button id="theme-toggle" aria-label="Toggle theme"><span class="t-light">🌙</span><span class="t-dark">☀️</span></button>
+      <a class="hdr-gh" href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener" aria-label="GitHub">GitHub ↗</a>
+      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme"><span class="t-light" aria-hidden="true">🌙</span><span class="t-dark" aria-hidden="true">☀️</span></button>
+      <button id="mobile-nav" class="mobile-nav" aria-label="Menu" aria-expanded="false">☰</button>
     </div>
+  </div>
+  <div id="mobile-drawer" class="mobile-drawer" hidden>
+    <a href="#pipeline">Pipeline</a><a href="#demo">Demo</a><a href="#results">Results</a><a href="#proof">Proof</a><a href="https://github.com/ShreyasP10/Resolvance" target="_blank">GitHub</a>
   </div>
 </header>
 
 <main>
-  <section class="hero" id="hero">
+  <section class="hero" id="hero" aria-label="Hero">
     <canvas id="particles" aria-hidden="true"></canvas>
     <div class="hero-gradient" aria-hidden="true"></div>
     <div class="hero-content">
-      <div class="hero-badge"><span class="dot"></span> SMART INDIA HACKATHON 2026 • Space Technology • Software</div>
+      <div class="hero-badge"><span class="dot" aria-hidden="true"></span> SMART INDIA HACKATHON 2026 • Space Technology • Software</div>
       <h1>Turn <span class="grad">10m</span> Sentinel-2<br>into <span class="grad">3.3m</span> intelligence</h1>
       <p>Sovereign N-channel super-resolution — spectral SAM guard, per-pixel uncertainty, QGIS-ready COG. No foreign buy, no hallucination.</p>
       <div class="hero-ctas">
         <a href="#demo" class="btn primary lg"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v13"/></svg> Try Demo</a>
         <a href="#pipeline" class="btn ghost">View Pipeline</a>
+        <a href="https://github.com/ShreyasP10/Resolvance" target="_blank" class="btn ghost">GitHub →</a>
       </div>
-      <div class="kpi">
-        <div class="kpi-card"><b>PSNR ≥28</b><span>Quality</span></div>
-        <div class="kpi-card"><b>SAM &lt;3°</b><span>Spectral</span></div>
-        <div class="kpi-card"><b>NDVI r&gt;0.98</b><span>Vegetation</span></div>
-        <div class="kpi-card"><b>RMSE &lt;0.3px</b><span>Geospatial</span></div>
-        <div class="kpi-card"><b>≤30s CPU</b><span>1024²×4</span></div>
+      <div class="kpi" role="list">
+        <div class="kpi-card" role="listitem"><b>PSNR ≥28</b><span>Quality</span></div>
+        <div class="kpi-card" role="listitem"><b>SAM &lt;3°</b><span>Spectral</span></div>
+        <div class="kpi-card" role="listitem"><b>NDVI r&gt;0.98</b><span>Vegetation</span></div>
+        <div class="kpi-card" role="listitem"><b>RMSE &lt;0.3px</b><span>Geospatial</span></div>
+        <div class="kpi-card" role="listitem"><b>≤30s CPU</b><span>1024²×4</span></div>
       </div>
     </div>
   </section>
 
-  <section id="pipeline" class="card glass">
+  <section id="pipeline" class="card glass" aria-label="Pipeline">
     <div class="card-head">
-      <div><h2>Pipeline: Ingest → SR → Uncertainty → Export</h2><p class="sub">End-to-end geospatial AI • 5 stages • Stateless Flask + tiled ML</p></div>
+      <div><h2>Pipeline: Ingest → SR → Uncertainty → Export</h2><p class="sub">End-to-end geospatial AI • 5 stages • Stateless Flask + tiled ML • <code>/api/infer</code></p></div>
       <span class="pill">SIH26142</span>
     </div>
-    <div class="flow">
-      <div class="node"><span class="num">01</span><div class="icon" aria-hidden="true">⬢</div><b>Ingest</b><p>N-band GeoTIFF + CRS Affine</p><code>core/io.py</code></div>
+    <div class="flow" role="list">
+      <div class="node" role="listitem"><span class="num">01</span><div class="icon" aria-hidden="true">⬢</div><b>Ingest</b><p>N-band GeoTIFF + CRS Affine</p><code>core/io.py</code></div>
       <div class="arrow" aria-hidden="true"><span></span></div>
-      <div class="node"><span class="num">02</span><div class="icon" aria-hidden="true">▦</div><b>Tile</b><p>256×256 +16 Gaussian</p><small>no seams</small></div>
+      <div class="node" role="listitem"><span class="num">02</span><div class="icon" aria-hidden="true">▦</div><b>Tile</b><p>256×256 +16 Gaussian</p><small>no seams • &lt;8GB</small></div>
       <div class="arrow" aria-hidden="true"><span></span></div>
-      <div class="node accent"><span class="num">03</span><div class="icon" aria-hidden="true">✦</div><b>SR 3×</b><p>N-ch ESRGAN/SwinIR</p><code>L1+Perceptual+SAM</code></div>
+      <div class="node accent" role="listitem"><span class="num">03</span><div class="icon" aria-hidden="true">✦</div><b>SR 3×</b><p>N-ch ESRGAN/SwinIR</p><code>L1+Perceptual+SAM</code></div>
       <div class="arrow" aria-hidden="true"><span></span></div>
-      <div class="node"><span class="num">04</span><div class="icon" aria-hidden="true">◉</div><b>Uncertainty</b><p>MC-Dropout T=10 viridis</p><small>threshold 0.6 red</small></div>
+      <div class="node" role="listitem"><span class="num">04</span><div class="icon" aria-hidden="true">◉</div><b>Uncertainty</b><p>MC-Dropout T=10 viridis</p><small>threshold 0.6 red</small></div>
       <div class="arrow" aria-hidden="true"><span></span></div>
-      <div class="node"><span class="num">05</span><div class="icon" aria-hidden="true">⬣</div><b>Export</b><p>COG planar + PNG</p><small>QGIS overlay</small></div>
+      <div class="node" role="listitem"><span class="num">05</span><div class="icon" aria-hidden="true">⬣</div><b>Export</b><p>COG planar + PNG</p><small>QGIS overlay</small></div>
     </div>
   </section>
 
-  <section id="demo" class="card glass">
-    <div class="card-head"><h2>Demo — Upload 10m GeoTIFF</h2><span class="pill muted">≤50MB • 1/3/4/8-band auto-detect</span></div>
+  <section id="demo" class="card glass" aria-label="Demo">
+    <div class="card-head"><h2>Demo — Upload 10m GeoTIFF</h2><span class="pill muted">≤50MB • 1/3/4/8-band auto-detect • EPSG preserved</span></div>
     <div id="drop" class="drop" role="button" tabindex="0" aria-label="Upload GeoTIFF — click or drag file">
       <div class="drop-icon-wrap" aria-hidden="true"><svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg></div>
       <h3>Drag &amp; drop 4-band <code>.tif</code> here</h3>
-      <p class="muted">or click to browse • Supports <code>.tif .tiff .png .jpg</code></p>
+      <p class="muted">or click to browse • Supports <code>.tif .tiff .png .jpg</code> • Try <button type="button" class="link-btn" onclick="event.stopPropagation(); loadSample('sample/sentinel_10m_4band_512.tif')">sample 512</button> <button type="button" class="link-btn" onclick="event.stopPropagation(); loadSample('sample/sentinel_10m_8band_512.tif')">8-band</button></p>
       <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg" hidden>
-      <button class="btn primary" id="browse-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v9"/></svg> Browse Files</button>
+      <div class="drop-actions">
+        <button class="btn primary" id="browse-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v9"/></svg> Browse Files</button>
+        <span id="file-name" class="file-name" aria-live="polite"></span>
+      </div>
       <span id="status" class="status" aria-live="polite"></span>
-      <div id="progress" class="progress" hidden><div class="bar"></div><span class="progress-text">0%</span></div>
+      <div id="progress" class="progress" hidden><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div><span class="progress-text">0%</span></div>
     </div>
   </section>
 
-  <section id="results" class="card glass" hidden>
+  <section id="results" class="card glass" hidden aria-label="Results">
     <div class="card-head">
       <h2>Results — 4-Layer Viewer</h2>
       <div class="head-actions">
@@ -91,21 +102,22 @@
     </div>
 
     <div class="map-grid">
-      <div class="map-panel"><div class="map-head"><h3>Input 10m</h3><select id="layer-input" class="mini-select" aria-label="Input layer"><option value="rgb">RGB</option><option value="nir">NIR</option><option value="ndvi">NDVI</option></select></div><div id="map-input" class="leaflet-map" aria-label="Input map"></div></div>
-      <div class="map-panel"><div class="map-head"><h3>SR 3.3m</h3><select id="layer-sr" class="mini-select" aria-label="SR layer"><option value="rgb">RGB</option><option value="nir">NIR</option><option value="ndvi">NDVI</option></select></div><div id="map-sr" class="leaflet-map" aria-label="SR map"></div></div>
-      <div class="map-panel"><div class="map-head"><h3>Heatmap</h3><div class="legend-mini" id="legend-mini" aria-hidden="true"></div></div><div id="map-heat" class="leaflet-map" aria-label="Heatmap"></div></div>
-      <div class="map-panel"><div class="map-head"><h3>Diff</h3><span class="diff-badge" id="diff-stats">—</span></div><div id="map-diff" class="leaflet-map" aria-label="Difference map"></div></div>
+      <div class="map-panel"><div class="map-head"><h3>Input 10m</h3><select id="layer-input" class="mini-select" aria-label="Input layer"><option value="rgb">RGB</option><option value="nir">NIR</option><option value="ndvi">NDVI</option></select></div><div id="map-input" class="leaflet-map" role="img" aria-label="Input map"></div></div>
+      <div class="map-panel"><div class="map-head"><h3>SR 3.3m</h3><select id="layer-sr" class="mini-select" aria-label="SR layer"><option value="rgb">RGB</option><option value="nir">NIR</option><option value="ndvi">NDVI</option></select></div><div id="map-sr" class="leaflet-map" role="img" aria-label="SR map"></div></div>
+      <div class="map-panel"><div class="map-head"><h3>Heatmap</h3><div class="legend-mini" id="legend-mini" aria-hidden="true"></div></div><div id="map-heat" class="leaflet-map" role="img" aria-label="Heatmap"></div></div>
+      <div class="map-panel"><div class="map-head"><h3>Diff</h3><span class="diff-badge" id="diff-stats">—</span></div><div id="map-diff" class="leaflet-map" role="img" aria-label="Difference map"></div></div>
     </div>
+
     <!-- Fallback static preview — always visible even if Leaflet fails -->
     <div class="images" style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-      <div style="text-align:center"><b style="font-size:12px">Input Preview</b><img id="img-input" alt="Input preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
-      <div style="text-align:center"><b style="font-size:12px">SR Preview</b><img id="img-sr" alt="SR preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
-      <div style="text-align:center"><b style="font-size:12px">Heatmap Preview</b><img id="img-heat" alt="Heatmap preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+      <div style="text-align:center"><b style="font-size:12px">Input Preview</b><img id="img-input" alt="Input preview" loading="lazy" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+      <div style="text-align:center"><b style="font-size:12px">SR Preview</b><img id="img-sr" alt="SR preview" loading="lazy" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+      <div style="text-align:center"><b style="font-size:12px">Heatmap Preview</b><img id="img-heat" alt="Heatmap preview" loading="lazy" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
     </div>
 
     <div class="compare-section">
       <label class="slider-label"><span>Compare</span><input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider"><span id="slider-val">50%</span></label>
-      <div class="compare" id="compare" role="img" aria-label="Comparison view"><img id="c-left" alt="Left"><img id="c-right" alt="Right"><div class="handle" id="handle" tabindex="0" role="slider" aria-label="Compare handle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
+      <div class="compare" id="compare" role="img" aria-label="Comparison view"><img id="c-left" alt="Left" loading="lazy"><img id="c-right" alt="Right" loading="lazy"><div class="handle" id="handle" tabindex="0" role="slider" aria-label="Compare handle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
     </div>
 
     <div class="two">
@@ -115,24 +127,24 @@
     <div id="downloads" class="downloads"></div>
   </section>
 
-  <section class="card glass">
+  <section id="proof" class="card glass" aria-label="Proof">
     <div class="card-head"><h2>Direct Proof for Judge</h2><span class="pill">Verifiable</span></div>
     <ul class="info">
       <li><b>CRS:</b> <code>meta crs EPSG:32643</code> + <code>download_tif</code> COG → QGIS overlay</li>
       <li><b>SAM:</b> <code>sam_mean_deg &lt;3°</code> spectral</li>
-      <li><b>NDVI:</b> <code>ndvi_corr &gt;0.98</code> vegetation</li>
+      <li><b>NDVI:</b> <code>ndvi_corr &gt;0.90</code> vegetation</li>
       <li><b>RMSE:</b> <code>rmse_px &lt;0.3px</code> geospatial</li>
       <li><b>API:</b> <code>POST /api/infer</code> • <code>GET /api/health</code></li>
     </ul>
   </section>
 </main>
 
-<footer class="foot">
+<footer class="foot" role="contentinfo">
   <div class="foot-inner">
     <div class="foot-brand"><span class="logo-mark">⬢</span><b>Resolvance</b><span>SIH26142</span></div>
-    <div class="foot-links"><a href="#pipeline">Pipeline</a><a href="#demo">Demo</a><a href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener">GitHub</a></div>
+    <div class="foot-links"><a href="#pipeline">Pipeline</a><a href="#demo">Demo</a><a href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener">GitHub</a><a href="#hero">Top ↑</a></div>
   </div>
-  <div class="foot-copy">Team Antariksh Setu • SMART INDIA HACKATHON 2026 • Space Technology</div>
+  <div class="foot-copy">Team Antariksh Setu • SMART INDIA HACKATHON 2026 • Space Technology • <span id="foot-year"></span></div>
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

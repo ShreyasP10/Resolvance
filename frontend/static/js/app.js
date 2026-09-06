@@ -1,29 +1,40 @@
-/* Resolvance - SIH26142 - Fixed UI */
+/* Resolvance — SIH26142 — Professional UI */
 const $=id=>document.getElementById(id);
 let statusEl, slider, valEl, progressEl, progressBar, progressText, themeToggle;
 let maps={}, mapLayers={}, currentImages={}, currentMeta=null;
-let syncEnabled=true;
 
 function initDOM(){
   statusEl=$('status'); slider=$('slider'); valEl=$('slider-val');
   progressEl=$('progress'); progressBar=document.querySelector('.bar'); progressText=document.querySelector('.progress-text');
   themeToggle=$('theme-toggle');
   if(themeToggle) themeToggle.addEventListener('click',()=>applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'));
+  const mobileNav=$('mobile-nav'), drawer=$('mobile-drawer');
+  if(mobileNav && drawer){
+    mobileNav.addEventListener('click',()=>{
+      const open=drawer.hidden===false;
+      drawer.hidden=open;
+      mobileNav.setAttribute('aria-expanded',String(!open));
+    });
+  }
+  const footYear=$('foot-year');
+  if(footYear) footYear.textContent=new Date().getFullYear();
   const drop=$('drop');
   if(drop){
     ['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('drag-active');}));
     ['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('drag-active');}));
     drop.addEventListener('drop',ev=>{
-      if(ev.dataTransfer.files.length){$('file').files=ev.dataTransfer.files; upload();}
+      if(ev.dataTransfer.files.length){$('file').files=ev.dataTransfer.files; updateFileName(); upload();}
     });
     drop.addEventListener('click',ev=>{
-      if(ev.target.closest('#file')||ev.target.closest('button')) return;
+      if(ev.target.closest('#file')||ev.target.closest('button')||ev.target.closest('.link-btn')) return;
       $('file').click();
     });
     drop.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();$('file').click();}});
   }
   const fileInput=$('file');
-  if(fileInput) fileInput.addEventListener('change',upload);
+  if(fileInput){
+    fileInput.addEventListener('change',()=>{updateFileName(); upload();});
+  }
   if(slider){
     slider.addEventListener('input',e=>onSlider(e.target.value));
     slider.addEventListener('keydown',e=>{
@@ -46,7 +57,10 @@ function initDOM(){
     const el=$(id); if(el) el.addEventListener('change',()=>switchMapLayer(id.replace('layer-',''), el.value));
   });
 }
-
+function updateFileName(){
+  const f=$('file')?.files[0], el=$('file-name');
+  if(el) el.textContent=f?`${f.name} • ${(f.size/1024/1024).toFixed(2)} MB`:'';
+}
 const THEME_KEY='resolvance-theme';
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
@@ -65,14 +79,14 @@ function setStatus(msg,err=false){
 function showProgress(show,pct=0){
   if(!progressEl) return;
   progressEl.hidden=!show;
-  if(show && progressBar){ progressBar.style.width=pct+'%'; if(progressText) progressText.textContent=Math.round(pct)+'%';}
+  if(show && progressBar){ progressBar.style.width=pct+'%'; progressBar.setAttribute('aria-valuenow',Math.round(pct)); if(progressText) progressText.textContent=Math.round(pct)+'%';}
 }
 function escapeHTML(s){
   if(typeof s!=='string') return s;
   return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 }
 function initMaps(){
-  if(!window.L){return;}
+  if(!window.L) return;
   if(maps.input) return;
   const opts={center:[19.1,72.8],zoom:11,zoomControl:true,attributionControl:false,preferCanvas:true};
   const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
@@ -80,7 +94,7 @@ function initMaps(){
     const m=L.map('map-'+id,{...opts,layers:[sat]});
     maps[id]=m; mapLayers[id]={};
     m.on('move',e=>{
-      if(!syncEnabled) return;
+      if(!window.syncEnabled && window.syncEnabled===false) return;
       const c=e.target.getCenter(), z=e.target.getZoom();
       Object.keys(maps).forEach(o=>{ if(o!==id) maps[o].setView(c,z,{animate:false,noMoveStart:true});});
     });
@@ -109,14 +123,9 @@ function switchMapLayer(mapId, type){
 }
 function addImageOverlays(imgs){
   currentImages=imgs;
-  // Defer Leaflet init until results is visible — otherwise maps have 0 size
   const resSec=$('results');
-  const visible = resSec && !resSec.hidden;
-  if(!visible){
-    // Delay Leaflet until after visible
-    setTimeout(()=>addImageOverlays(imgs), 200);
-    return;
-  }
+  const visible = resSec && !resSec.hidden && resSec.style.display!=='none';
+  if(!visible){ setTimeout(()=>addImageOverlays(imgs), 200); return; }
   if(!maps.input) initMaps();
   const b=getBounds();
   ['input','sr','heat','diff'].forEach(id=>{
@@ -131,13 +140,12 @@ function addImageOverlays(imgs){
     maps.input.fitBounds(L.latLngBounds(b));
   }catch(e){ console.warn('Leaflet overlay failed', e); }
   setTimeout(()=>Object.values(maps).forEach(m=>{ try{m.invalidateSize();}catch(e){}}),200);
-  // Also ensure static previews are set
   ['img-input','img-sr','img-heat'].forEach(id=>{
     const el=$(id);
-    if(el && imgs[id.replace('img-','')]) el.src=imgs[id.replace('img-','')];
+    const key=id.replace('img-','');
+    if(el && imgs[key]) el.src=imgs[key];
   });
 }
-
 let currentCompare='input-sr';
 function updateCompareMode(){
   const el=$('compare-mode');
@@ -151,7 +159,6 @@ function onSlider(v){
   if(handle){ handle.style.left=p+'%'; handle.setAttribute('aria-valuenow',p); }
   const leftEl=$('c-left'), rightEl=$('c-right');
   if(!leftEl || !rightEl) return;
-  // Map compare modes to images
   let leftKey='input', rightKey='sr';
   if(currentCompare==='input-heat'){ leftKey='input'; rightKey='heatmap';}
   else if(currentCompare==='sr-diff'){ leftKey='sr'; rightKey='heatmap';}
@@ -161,7 +168,6 @@ function onSlider(v){
   leftEl.style.clipPath=`inset(0 ${100-p}% 0 0)`;
   rightEl.style.clipPath=`inset(0 0 0 ${p}% 0)`;
 }
-
 function renderProof(j){
   const m=j.metrics||{}, meta=j.meta||{};
   const crsCard=$('crs-card'), dl=$('downloads'), proof=$('proof');
@@ -172,20 +178,19 @@ function renderProof(j){
     const sam=m.sam_mean_deg, ndvi=m.ndvi_corr, rmse=m.rmse_px;
     const sPass=sam!=null && sam<3, nPass=ndvi!=null && ndvi>0.90, rPass=rmse!=null && rmse<0.3;
     proof.innerHTML=`
-      <div class="proof ${sam==null?'':sPass?'pass':'fail'}"><b>${sam!=null?escapeHTML(String(sam)):'-'}°</b>SAM &lt;3° ${sam==null?'':sPass?'✓':'✗'}<br><small>spectral</small></div>
-      <div class="proof ${ndvi==null?'':nPass?'pass':'fail'}"><b>${ndvi!=null?escapeHTML(String(ndvi)):'-'}</b>NDVI r &gt;0.90 ${ndvi==null?'':nPass?'✓':'✗'}<br><small>vegetation</small></div>
-      <div class="proof ${rmse==null?'':rPass?'pass':'fail'}"><b>${rmse!=null?escapeHTML(String(rmse)):'-'} px</b>RMSE &lt;0.3px ${rmse==null?'':rPass?'✓':'✗'}<br><small>geospatial</small></div>`;
+      <div class="proof ${sam==null?'':sPass?'pass':'fail'}"><b>${sam!=null?escapeHTML(String(sam)):'—'}°</b>SAM &lt;3° ${sam==null?'':sPass?'✓':'✗'}<br><small>spectral</small></div>
+      <div class="proof ${ndvi==null?'':nPass?'pass':'fail'}"><b>${ndvi!=null?escapeHTML(String(ndvi)):'—'}</b>NDVI r &gt;0.90 ${ndvi==null?'':nPass?'✓':'✗'}<br><small>vegetation</small></div>
+      <div class="proof ${rmse==null?'':rPass?'pass':'fail'}"><b>${rmse!=null?escapeHTML(String(rmse)):'—'} px</b>RMSE &lt;0.3px ${rmse==null?'':rPass?'✓':'✗'}<br><small>geospatial</small></div>`;
   }
   const leg=$('legend-mini');
   if(leg) leg.innerHTML=`<span style="display:flex;align-items:center;gap:6px"><span style="width:70px;height:6px;background:linear-gradient(90deg,#440154,#3b528b,#21918c,#5ec962,#fde725);border-radius:2px"></span><span style="font-size:10px">Low</span><span style="font-size:10px">High</span></span>`;
 }
-
 async function upload(){
-  const f=$('file')?$('file').files[0]:null;
+  const f=$('file')?.files[0];
   if(!f){ setStatus('Pick a file first',true); return;}
   if(f.size>50*1024*1024){ setStatus('Max 50MB',true); return;}
   const fd=new FormData(); fd.append('file',f);
-  setStatus('Uploading & processing - this takes a minute on CPU...');
+  setStatus('Uploading & processing — this takes a minute on CPU...');
   showProgress(true,10);
   let pct=10; const iv=setInterval(()=>{ pct+= (90-pct)*0.05; showProgress(true,pct);},1000);
   try{
@@ -198,10 +203,8 @@ async function upload(){
     const resSec=$('results');
     if(resSec){ resSec.hidden=false; resSec.style.display='block'; resSec.removeAttribute('hidden');}
     currentImages=j.images; currentMeta=j.meta;
-    // Static previews — guaranteed visible
     const els={ 'img-input':j.images.input, 'img-sr':j.images.sr, 'img-heat':j.images.heatmap };
     Object.entries(els).forEach(([id,src])=>{ const el=$(id); if(el){ el.src=src; el.style.display='block'; }});
-    // Leaflet overlays after visible
     setTimeout(()=>addImageOverlays(j.images), 100);
     const metaEl=$('meta'), metricsEl=$('metrics');
     if(metaEl) metaEl.textContent=JSON.stringify(j.meta,null,2);
@@ -213,15 +216,20 @@ async function upload(){
     clearInterval(iv); showProgress(false); setStatus('Failed: '+e.message,true);
   }
 }
-
-// Init
+window.loadSample=async function(path){
+  try{
+    setStatus('Loading sample…');
+    const r=await fetch('/'+path);
+    const blob=await r.blob();
+    const file=new File([blob], path.split('/').pop(), {type:'image/tiff'});
+    const dt=new DataTransfer(); dt.items.add(file);
+    $('file').files=dt.files; updateFileName(); upload();
+  }catch(e){ setStatus('Sample load failed: '+e.message,true); }
+}
 document.addEventListener('DOMContentLoaded',()=>{
   initDOM();
   initTheme();
-  // Defer map init until results shown — avoids 0-size init when hidden
-  // initMaps(); // lazy
   onSlider(50);
-  // Neural network animation — layered + pulsing + theme-aware
   const canvas=$('particles');
   if(canvas){
     const ctx=canvas.getContext('2d');
@@ -233,7 +241,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
     window.addEventListener('resize',resize); resize();
     const isDark=()=>document.documentElement.getAttribute('data-theme')==='dark';
-    // Create 3-layer neural structure
     const layers=3, perLayer=9;
     const nodes=[];
     function initNodes(){
@@ -243,79 +250,62 @@ document.addEventListener('DOMContentLoaded',()=>{
         for(let i=0;i<perLayer;i++){
           const x=(w/layers)*(l+0.5) + (Math.random()-0.5)*w/layers*0.6;
           const y=(h/perLayer)*(i+0.5) + (Math.random()-0.5)*h/perLayer*0.5;
-          nodes.push({x,y, ox:x, oy:y, vx:(Math.random()-.5)*0.3, vy:(Math.random()-.5)*0.3, layer:l, pulse:Math.random()*Math.PI*2, r:1.2+Math.random()*1.6});
+          nodes.push({x,y, ox:x, oy:y, vx:(Math.random()-.5)*0.3, vy:(Math.random()-.5)*0.3, layer:l, pulse:Math.random()*6.28, r:1.2+Math.random()*1.6});
         }
       }
-      // Add random free nodes
-      for(let i=0;i<14;i++) nodes.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*0.35,vy:(Math.random()-.5)*0.35,layer:-1,pulse:Math.random()*6,r:1.0+Math.random()*1.0, ox:0, oy:0});
+      for(let i=0;i<14;i++) nodes.push({x:Math.random()*canvas.clientWidth,y:Math.random()*canvas.clientHeight,vx:(Math.random()-.5)*0.35,vy:(Math.random()-.5)*0.35,layer:-1,pulse:Math.random()*6.28,r:1.0+Math.random(),ox:0,oy:0});
     }
-    initNodes();
-    window.addEventListener('resize',()=>{initNodes(); resize();});
-    // Observe theme change to keep visible
-    new MutationObserver(()=>{}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+    initNodes(); window.addEventListener('resize',()=>{initNodes(); resize();});
     let t=0;
     (function frame(){
       const w=canvas.clientWidth, h=canvas.clientHeight;
       ctx.clearRect(0,0,w,h); t+=0.015;
       const dark=isDark();
-      // Update nodes
       nodes.forEach(n=>{
-        if(n.layer>=0){
-          // gentle oscillation around origin
-          n.x = n.ox + Math.sin(t + n.pulse)*6;
-          n.y = n.oy + Math.cos(t*0.7 + n.pulse)*4;
-        } else {
-          n.x+=n.vx; n.y+=n.vy;
-          if(n.x<0||n.x>w) n.vx*=-1;
-          if(n.y<0||n.y>h) n.vy*=-1;
-        }
+        if(n.layer>=0){ n.x=n.ox+Math.sin(t+n.pulse)*6; n.y=n.oy+Math.cos(t*0.7+n.pulse)*4; }
+        else{ n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>w) n.vx*=-1; if(n.y<0||n.y>h) n.vy*=-1; }
       });
-      // Connections: intra-layer + inter-layer
       ctx.lineWidth=0.7;
-      nodes.forEach((a,i)=>{
-        nodes.slice(i+1).forEach(b=>{
-          const d=Math.hypot(a.x-b.x,a.y-b.y);
-          const crossLayer = a.layer!==b.layer && a.layer>=0 && b.layer>=0 && Math.abs(a.layer-b.layer)===1;
-          const maxD = crossLayer ? 220 : 130;
-          if(d<maxD){
-            const alpha = crossLayer ? (0.22*(1-d/maxD)) : (0.14*(1-d/maxD));
-            ctx.globalAlpha=alpha;
-            ctx.strokeStyle = crossLayer ? (dark?'rgba(122,240,255,0.9)':'rgba(0,255,136,0.9)') : (dark?'rgba(122,240,255,0.5)':'rgba(0,255,136,0.45)');
-            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-            // traveling pulse
-            if(crossLayer && Math.random()<0.02){
-              const mid = 0.5+Math.sin(t*2)*0.1;
-              const mx=a.x+(b.x-a.x)*mid, my=a.y+(b.y-a.y)*mid;
-              ctx.globalAlpha=0.9; ctx.fillStyle=dark?'#7af0ff':'#00ff88';
-              ctx.beginPath(); ctx.arc(mx,my,1.8,0,Math.PI*2); ctx.fill();
-            }
+      nodes.forEach((a,i)=> nodes.slice(i+1).forEach(b=>{
+        const d=Math.hypot(a.x-b.x,a.y-b.y);
+        const cross=a.layer!==b.layer && a.layer>=0 && b.layer>=0 && Math.abs(a.layer-b.layer)===1;
+        const maxD=cross?220:130;
+        if(d<maxD){
+          const alpha=cross?0.22*(1-d/maxD):0.14*(1-d/maxD);
+          ctx.globalAlpha=alpha;
+          ctx.strokeStyle=cross?(dark?'rgba(122,240,255,0.9)':'rgba(0,255,136,0.9)'):(dark?'rgba(122,240,255,0.5)':'rgba(0,255,136,0.45)');
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+          if(cross && Math.random()<0.02){
+            const mid=0.5+Math.sin(t*2)*0.1; const mx=a.x+(b.x-a.x)*mid, my=a.y+(b.y-a.y)*mid;
+            ctx.globalAlpha=0.9; ctx.fillStyle=dark?'#7af0ff':'#00ff88';
+            ctx.beginPath(); ctx.arc(mx,my,1.8,0,Math.PI*2); ctx.fill();
           }
-        });
-      });
-      // Nodes
-      nodes.forEach(n=>{
-        const pulse = 0.7+0.3*Math.sin(t*1.5 + n.pulse);
-        ctx.globalAlpha=0.95*pulse;
-        // glow
-        ctx.shadowColor = n.layer>=0 ? (dark?'#7af0ff':'#00ff88') : (dark?'#a5b4fc':'#00ff88');
-        ctx.shadowBlur= n.layer>=0 ? 6 : 4;
-        ctx.fillStyle = n.layer>=0 ? (dark?'#7af0ff':'#00ff88') : '#ffffff';
-        // core
-        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
-        ctx.shadowBlur=0;
-        // outer ring for layered nodes
-        if(n.layer>=0){
-          ctx.globalAlpha=0.18;
-          ctx.strokeStyle= dark?'#7af0ff':'#00ff88';
-          ctx.lineWidth=0.8;
-          ctx.beginPath(); ctx.arc(n.x,n.y,n.r+4,0,Math.PI*2); ctx.stroke();
         }
+      }));
+      nodes.forEach(n=>{
+        const pulse=0.7+0.3*Math.sin(t*1.5+n.pulse);
+        ctx.globalAlpha=0.95*pulse; ctx.shadowColor=n.layer>=0?(dark?'#7af0ff':'#00ff88'):'#ffffff'; ctx.shadowBlur=n.layer>=0?6:4;
+        ctx.fillStyle=n.layer>=0?(dark?'#7af0ff':'#00ff88'):'#ffffff';
+        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+        if(n.layer>=0){ ctx.globalAlpha=0.18; ctx.strokeStyle=dark?'#7af0ff':'#00ff88'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.arc(n.x,n.y,n.r+4,0,Math.PI*2); ctx.stroke(); }
       });
-      ctx.globalAlpha=1;
-      requestAnimationFrame(frame);
+      ctx.globalAlpha=1; requestAnimationFrame(frame);
     })();
   }
-  // expose for inline onchange
   window.updateCompareMode=updateCompareMode;
   window.upload=upload;
 });
+function updateCompareMode(){ const el=$('compare-mode'); if(el){ currentCompare=el.value; onSlider(slider?slider.value:50);} }
+let currentCompare='input-sr';
+function onSlider(v){
+  const p=Number(v); const valEl=$('slider-val'); if(valEl) valEl.textContent=p+'%';
+  const handle=$('handle'); if(handle){ handle.style.left=p+'%'; handle.setAttribute('aria-valuenow',p);}
+  const leftEl=$('c-left'), rightEl=$('c-right');
+  if(!leftEl||!rightEl) return;
+  let leftKey='input', rightKey='sr';
+  if(currentCompare==='input-heat'){ leftKey='input'; rightKey='heatmap';}
+  else if(currentCompare==='sr-diff'){ leftKey='sr'; rightKey='heatmap';}
+  const lImg=currentImages[leftKey], rImg=currentImages[rightKey];
+  if(lImg) leftEl.src=lImg; if(rImg) rightEl.src=rImg;
+  leftEl.style.clipPath=`inset(0 ${100-p}% 0 0)`; rightEl.style.clipPath=`inset(0 0 0 ${p}% 0)`;
+}
