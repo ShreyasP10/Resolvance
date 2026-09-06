@@ -96,6 +96,12 @@
       <div class="map-panel"><div class="map-head"><h3>Heatmap</h3><div class="legend-mini" id="legend-mini" aria-hidden="true"></div></div><div id="map-heat" class="leaflet-map" aria-label="Heatmap"></div></div>
       <div class="map-panel"><div class="map-head"><h3>Diff</h3><span class="diff-badge" id="diff-stats">—</span></div><div id="map-diff" class="leaflet-map" aria-label="Difference map"></div></div>
     </div>
+    <!-- Fallback static preview — always visible even if Leaflet fails -->
+    <div class="images" style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      <div style="text-align:center"><b style="font-size:12px">Input Preview</b><img id="img-input" alt="Input preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+      <div style="text-align:center"><b style="font-size:12px">SR Preview</b><img id="img-sr" alt="SR preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+      <div style="text-align:center"><b style="font-size:12px">Heatmap Preview</b><img id="img-heat" alt="Heatmap preview" style="width:100%;border:1px solid #e2e8f0;border-radius:8px;background:#f1f5f9;min-height:120px;object-fit:contain;margin-top:6px"></div>
+    </div>
 
     <div class="compare-section">
       <label class="slider-label"><span>Compare</span><input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider"><span id="slider-val">50%</span></label>

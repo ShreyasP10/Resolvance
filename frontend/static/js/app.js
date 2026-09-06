@@ -108,23 +108,34 @@ function switchMapLayer(mapId, type){
   else if(type==='ndvi' && currentImages.heatmap) layers.ndvi=L.imageOverlay(currentImages.heatmap,b,{opacity:0.7}).addTo(m);
 }
 function addImageOverlays(imgs){
-  if(!maps.input) initMaps();
   currentImages=imgs;
+  // Defer Leaflet init until results is visible — otherwise maps have 0 size
+  const resSec=$('results');
+  const visible = resSec && !resSec.hidden;
+  if(!visible){
+    // Delay Leaflet until after visible
+    setTimeout(()=>addImageOverlays(imgs), 200);
+    return;
+  }
+  if(!maps.input) initMaps();
   const b=getBounds();
   ['input','sr','heat','diff'].forEach(id=>{
     if(!maps[id]) return;
     Object.values(mapLayers[id]).forEach(l=>{ if(l) try{maps[id].removeLayer(l);}catch(e){}});
   });
-  // Add overlays only to relevant maps
-  if(imgs.input && maps.input) mapLayers.input.rgb=L.imageOverlay(imgs.input,b,{opacity:0.95}).addTo(maps.input);
-  if(imgs.sr && maps.sr) mapLayers.sr.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.95}).addTo(maps.sr);
-  if(imgs.heatmap && maps.heat) mapLayers.heat.rgb=L.imageOverlay(imgs.heatmap,b,{opacity:0.95}).addTo(maps.heat);
-  if(imgs.sr && maps.diff){
-    // diff as SR overlay for now
-    mapLayers.diff.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.85}).addTo(maps.diff);
-  }
-  try{ maps.input.fitBounds(L.latLngBounds(b)); }catch(e){}
-  setTimeout(()=>Object.values(maps).forEach(m=>{ try{m.invalidateSize();}catch(e){}}),150);
+  try{
+    if(imgs.input && maps.input) mapLayers.input.rgb=L.imageOverlay(imgs.input,b,{opacity:0.95}).addTo(maps.input);
+    if(imgs.sr && maps.sr) mapLayers.sr.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.95}).addTo(maps.sr);
+    if(imgs.heatmap && maps.heat) mapLayers.heat.rgb=L.imageOverlay(imgs.heatmap,b,{opacity:0.95}).addTo(maps.heat);
+    if(imgs.sr && maps.diff) mapLayers.diff.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.85}).addTo(maps.diff);
+    maps.input.fitBounds(L.latLngBounds(b));
+  }catch(e){ console.warn('Leaflet overlay failed', e); }
+  setTimeout(()=>Object.values(maps).forEach(m=>{ try{m.invalidateSize();}catch(e){}}),200);
+  // Also ensure static previews are set
+  ['img-input','img-sr','img-heat'].forEach(id=>{
+    const el=$(id);
+    if(el && imgs[id.replace('img-','')]) el.src=imgs[id.replace('img-','')];
+  });
 }
 
 let currentCompare='input-sr';
@@ -183,13 +194,15 @@ async function upload(){
     const j=await r.json();
     showProgress(false);
     if(!j.success){ setStatus(j.error,true); return;}
-    setStatus('Done ✓');
+    setStatus('Done ✓ — scroll down to see results');
     const resSec=$('results');
-    if(resSec) resSec.hidden=false;
+    if(resSec){ resSec.hidden=false; resSec.style.display='block'; resSec.removeAttribute('hidden');}
     currentImages=j.images; currentMeta=j.meta;
+    // Static previews — guaranteed visible
     const els={ 'img-input':j.images.input, 'img-sr':j.images.sr, 'img-heat':j.images.heatmap };
-    Object.entries(els).forEach(([id,src])=>{ const el=$(id); if(el) el.src=src;});
-    addImageOverlays(j.images);
+    Object.entries(els).forEach(([id,src])=>{ const el=$(id); if(el){ el.src=src; el.style.display='block'; }});
+    // Leaflet overlays after visible
+    setTimeout(()=>addImageOverlays(j.images), 100);
     const metaEl=$('meta'), metricsEl=$('metrics');
     if(metaEl) metaEl.textContent=JSON.stringify(j.meta,null,2);
     if(metricsEl) metricsEl.textContent=JSON.stringify(j.metrics,null,2);
@@ -205,7 +218,8 @@ async function upload(){
 document.addEventListener('DOMContentLoaded',()=>{
   initDOM();
   initTheme();
-  initMaps();
+  // Defer map init until results shown — avoids 0-size init when hidden
+  // initMaps(); // lazy
   onSlider(50);
   // particles
   const canvas=$('particles');
