@@ -1,4 +1,4 @@
-:root{--hdr:#0f2040;--hdr2:#1F4E79;--green:#0ea568;--green2:#15803D;--red:#d92d20;--cream:#FFF2CC;--cream2:#eef4ff;--grey:#f1f5f9;--ink:#0b1220;--muted:#64748b;--line:#e2e8f0;--card:#ffffff;--shadow:0 10px 30px rgba(15,32,64,.08);--shadow-lg:0 20px 50px rgba(15,32,64,.12);--radius:14px;--radius-lg:18px}
+:root{--card-hero:linear-gradient(135deg,rgba(255,255,255,0.7) 0%,rgba(240,245,255,0.5) 100%);--hdr:#0f2040;--hdr2:#1F4E79;--green:#0ea568;--green2:#15803D;--red:#d92d20;--cream:#FFF2CC;--cream2:#eef4ff;--grey:#f1f5f9;--ink:#0b1220;--muted:#64748b;--line:#e2e8f0;--card:#ffffff;--shadow:0 10px 30px rgba(15,32,64,.08);--shadow-lg:0 20px 50px rgba(15,32,64,.12);--radius:14px;--radius-lg:18px}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
 body{margin:0;font-family:'Inter',system-ui,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#e6f0ff 0%,transparent 60%),radial-gradient(900px 500px at 90% 0%,#e0fff1 0%,transparent 55%),#f6f8fb;color:var(--ink);line-height:1.5}
 a{color:var(--hdr2);text-decoration:none}
@@ -19,18 +19,18 @@ a{color:var(--hdr2);text-decoration:none}
 .t-dark{display:none} [data-theme="dark"] .t-light{display:none} [data-theme="dark"] .t-dark{display:inline}
 
 main{max-width:1280px;margin:auto;padding:20px}
-.hero{position:relative;overflow:hidden;border-radius:20px;background:linear-gradient(135deg,#0b1220 0%,#0f2040 40%,#14365f 100%);color:#fff;padding:0;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow-lg)}
-.hero-gradient{position:absolute;inset:0;background:radial-gradient(800px 400px at 30% 10%,rgba(14,165,104,.25),transparent 60%),radial-gradient(600px 300px at 85% 20%,rgba(96,165,255,.18),transparent 60%)}
-#particles{position:absolute;inset:0;opacity:.32}
+.hero{position:relative;overflow:hidden;border-radius:20px;background:var(--card-hero);color:var(--ink);padding:0;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow-lg)}
+.hero-gradient{position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(800px 400px at 30% 10%,rgba(14,165,104,.15),transparent 60%),radial-gradient(600px 300px at 85% 20%,rgba(96,165,255,.12),transparent 60%)}
+#particles{position:fixed;inset:0;opacity:.32;z-index:-2;pointer-events:none}
 .hero-content{position:relative;padding:64px 24px 40px;text-align:center;max-width:900px;margin:auto}
-.hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);padding:6px 12px;border-radius:999px;font-size:11px;letter-spacing:.5px;font-weight:700;backdrop-filter:blur(8px)}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--cream2);border:1px solid var(--line);padding:6px 12px;border-radius:999px;font-size:11px;letter-spacing:.5px;font-weight:700;backdrop-filter:blur(8px)}
 .dot{width:7px;height:7px;background:#00ff88;border-radius:50%;box-shadow:0 0 8px #00ff88;animation:pulse 2s infinite}
 .hero h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(32px,6vw,52px);font-weight:800;letter-spacing:-.02em;line-height:1; margin:16px 0 12px}
 .grad{background:linear-gradient(90deg,#00ff88,#7af0ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hero p{opacity:.92;max-width:760px;margin:0 auto 22px;font-size:clamp(14px,2.5vw,18px);line-height:1.6}
 .hero-ctas{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:22px}
 .kpi{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
-.kpi-card{min-width:108px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);padding:12px 14px;border-radius:12px;backdrop-filter:blur(8px)}
+.kpi-card{min-width:108px;background:var(--card);border:1px solid var(--line);padding:12px 14px;border-radius:12px;backdrop-filter:blur(8px)}
 .kpi-card b{display:block;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700}
 .kpi-card span:last-child{font-size:10px;opacity:.7;letter-spacing:.4px}
 
@@ -119,6 +119,7 @@ main{max-width:1280px;margin:auto;padding:20px}
 
 /* Dark Theme Additions */
 [data-theme="dark"] {
+  --card-hero: linear-gradient(135deg, rgba(11,18,32,0.8) 0%, rgba(15,32,64,0.6) 100%);
   --hdr: #e2e8f0;
   --hdr2: #00ff88;
   --green: #00ff88;
