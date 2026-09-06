@@ -221,23 +221,97 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Defer map init until results shown — avoids 0-size init when hidden
   // initMaps(); // lazy
   onSlider(50);
-  // particles
+  // Neural network animation — layered + pulsing + theme-aware
   const canvas=$('particles');
   if(canvas){
     const ctx=canvas.getContext('2d');
-    function resize(){ canvas.width=canvas.clientWidth; canvas.height=canvas.clientHeight; }
+    let dpr=window.devicePixelRatio||1;
+    function resize(){
+      const rect=canvas.getBoundingClientRect();
+      canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
     window.addEventListener('resize',resize); resize();
-    const pts=Array.from({length:50},()=>({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35}));
+    const isDark=()=>document.documentElement.getAttribute('data-theme')==='dark';
+    // Create 3-layer neural structure
+    const layers=3, perLayer=9;
+    const nodes=[];
+    function initNodes(){
+      nodes.length=0;
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+      for(let l=0;l<layers;l++){
+        for(let i=0;i<perLayer;i++){
+          const x=(w/layers)*(l+0.5) + (Math.random()-0.5)*w/layers*0.6;
+          const y=(h/perLayer)*(i+0.5) + (Math.random()-0.5)*h/perLayer*0.5;
+          nodes.push({x,y, ox:x, oy:y, vx:(Math.random()-.5)*0.3, vy:(Math.random()-.5)*0.3, layer:l, pulse:Math.random()*Math.PI*2, r:1.2+Math.random()*1.6});
+        }
+      }
+      // Add random free nodes
+      for(let i=0;i<14;i++) nodes.push({x:Math.random()*w,y:Math.random()*h,vx:(Math.random()-.5)*0.35,vy:(Math.random()-.5)*0.35,layer:-1,pulse:Math.random()*6,r:1.0+Math.random()*1.0, ox:0, oy:0});
+    }
+    initNodes();
+    window.addEventListener('resize',()=>{initNodes(); resize();});
+    // Observe theme change to keep visible
+    new MutationObserver(()=>{}).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+    let t=0;
     (function frame(){
-      const w=canvas.width, h=canvas.height;
-      ctx.clearRect(0,0,w,h);
-      pts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>w) p.vx*=-1; if(p.y<0||p.y>h) p.vy*=-1;});
-      ctx.strokeStyle='rgba(0,255,136,.22)';
-      pts.forEach((a,i)=> pts.slice(i+1).forEach(b=>{
-        const d=Math.hypot(a.x-b.x,a.y-b.y);
-        if(d<120){ ctx.globalAlpha=1-d/120; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();}
-      }));
-      pts.forEach(p=>{ ctx.globalAlpha=1; ctx.fillStyle='#00ff88'; ctx.beginPath(); ctx.arc(p.x,p.y,1.4,0,Math.PI*2); ctx.fill();});
+      const w=canvas.clientWidth, h=canvas.clientHeight;
+      ctx.clearRect(0,0,w,h); t+=0.015;
+      const dark=isDark();
+      // Update nodes
+      nodes.forEach(n=>{
+        if(n.layer>=0){
+          // gentle oscillation around origin
+          n.x = n.ox + Math.sin(t + n.pulse)*6;
+          n.y = n.oy + Math.cos(t*0.7 + n.pulse)*4;
+        } else {
+          n.x+=n.vx; n.y+=n.vy;
+          if(n.x<0||n.x>w) n.vx*=-1;
+          if(n.y<0||n.y>h) n.vy*=-1;
+        }
+      });
+      // Connections: intra-layer + inter-layer
+      ctx.lineWidth=0.7;
+      nodes.forEach((a,i)=>{
+        nodes.slice(i+1).forEach(b=>{
+          const d=Math.hypot(a.x-b.x,a.y-b.y);
+          const crossLayer = a.layer!==b.layer && a.layer>=0 && b.layer>=0 && Math.abs(a.layer-b.layer)===1;
+          const maxD = crossLayer ? 220 : 130;
+          if(d<maxD){
+            const alpha = crossLayer ? (0.22*(1-d/maxD)) : (0.14*(1-d/maxD));
+            ctx.globalAlpha=alpha;
+            ctx.strokeStyle = crossLayer ? (dark?'rgba(122,240,255,0.9)':'rgba(0,255,136,0.9)') : (dark?'rgba(122,240,255,0.5)':'rgba(0,255,136,0.45)');
+            ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+            // traveling pulse
+            if(crossLayer && Math.random()<0.02){
+              const mid = 0.5+Math.sin(t*2)*0.1;
+              const mx=a.x+(b.x-a.x)*mid, my=a.y+(b.y-a.y)*mid;
+              ctx.globalAlpha=0.9; ctx.fillStyle=dark?'#7af0ff':'#00ff88';
+              ctx.beginPath(); ctx.arc(mx,my,1.8,0,Math.PI*2); ctx.fill();
+            }
+          }
+        });
+      });
+      // Nodes
+      nodes.forEach(n=>{
+        const pulse = 0.7+0.3*Math.sin(t*1.5 + n.pulse);
+        ctx.globalAlpha=0.95*pulse;
+        // glow
+        ctx.shadowColor = n.layer>=0 ? (dark?'#7af0ff':'#00ff88') : (dark?'#a5b4fc':'#00ff88');
+        ctx.shadowBlur= n.layer>=0 ? 6 : 4;
+        ctx.fillStyle = n.layer>=0 ? (dark?'#7af0ff':'#00ff88') : '#ffffff';
+        // core
+        ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0;
+        // outer ring for layered nodes
+        if(n.layer>=0){
+          ctx.globalAlpha=0.18;
+          ctx.strokeStyle= dark?'#7af0ff':'#00ff88';
+          ctx.lineWidth=0.8;
+          ctx.beginPath(); ctx.arc(n.x,n.y,n.r+4,0,Math.PI*2); ctx.stroke();
+        }
+      });
+      ctx.globalAlpha=1;
       requestAnimationFrame(frame);
     })();
   }
