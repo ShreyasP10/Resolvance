@@ -10,7 +10,7 @@ const THEME_KEY = 'resolvance-theme';
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(THEME_KEY, theme);
-  themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+  
 }
 function initTheme() {
   const saved = localStorage.getItem(THEME_KEY);
