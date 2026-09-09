@@ -75,6 +75,9 @@ def uncertainty(img: np.ndarray, model: Optional[SRModel] = None, T: int = 10) -
         img = img[np.newaxis, :, :]
     if model is None:
         model = SRModel(in_ch=img.shape[0])
+    # Channel mismatch -> fallback to simulated heatmap (no 8-ch weights)
+    if model.in_ch != img.shape[0]:
+        model = SRModel(in_ch=img.shape[0], out_ch=img.shape[0], scale=model.scale, device=model.device)
     
     # Real MC-Dropout implementation if model is loaded
     if model.model is not None:

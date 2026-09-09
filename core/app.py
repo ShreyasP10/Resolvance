@@ -39,6 +39,10 @@ def create_app(settings: Settings | None=None) -> Flask:
     def index(): return render_template("index.html")
     @app.route("/static/results/<path:filename>")
     def result_file(filename: str): return send_from_directory(settings.results_dir, filename)
+    @app.route("/sample/<path:filename>")
+    def sample_file(filename: str):
+        sample_dir = Path(__file__).resolve().parent.parent / "sample"
+        return send_from_directory(sample_dir, filename)
     @app.route("/favicon.ico")
     def favicon():
         svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="#0b0d11" stroke="#00ff88" stroke-width="3"/><text x="32" y="42" font-family="monospace" font-size="28" font-weight="bold" fill="#00ff88" text-anchor="middle">R</text></svg>'
