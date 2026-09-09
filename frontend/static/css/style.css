@@ -178,3 +178,21 @@ html[data-theme='dark'] .panel{background:#0f172a !important;border-color:#33415
 html[data-theme='dark'] .panel pre{background:#020617 !important;color:#e2e8f0 !important}
 html[data-theme='dark'] .proof{background:#1e293b !important}
 html[data-theme='dark'] .compare-section{background:linear-gradient(180deg,#0f172a,#1e293b) !important}
+
+/* === DARK: fix white lines (borders) === */
+html[data-theme='dark'] .hdr{border-bottom-color:#1e293b !important;box-shadow:0 1px 0 #1e293b !important}
+html[data-theme='dark'] .card{border-color:#1e293b !important}
+html[data-theme='dark'] .card-head{border-bottom-color:#1e293b !important}
+html[data-theme='dark'] .node{border-color:#334155 !important}
+html[data-theme='dark'] .arrow span{background:#334155 !important}
+html[data-theme='dark'] .arrow span::after{border-color:#334155 !important}
+html[data-theme='dark'] .drop{border-color:#334155 !important}
+html[data-theme='dark'] .map-panel{border-color:#1e293b !important}
+html[data-theme='dark'] .compare{border-color:#334155 !important}
+html[data-theme='dark'] .panel{border-color:#334155 !important}
+html[data-theme='dark'] .panel h3{border-bottom-color:#1e293b !important}
+html[data-theme='dark'] .foot{border-top-color:#1e293b !important}
+html[data-theme='dark'] .foot-copy{border-top-color:#1e293b !important}
+html[data-theme='dark'] hr{border-color:#1e293b !important}
+html[data-theme='dark'] .pill{border-color:#334155 !important}
+html[data-theme='dark'] .progress{background:#1e293b !important}
