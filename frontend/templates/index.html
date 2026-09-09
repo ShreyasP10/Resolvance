@@ -9,8 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-<link rel="stylesheet" href="/static/css/style.css?v=3">
+<link rel="stylesheet" href="/static/css/style.css?v=4">
 <script>try{var t=localStorage.getItem('resolvance-theme');if(t)document.documentElement.setAttribute('data-theme',t);else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.setAttribute('data-theme','dark');}catch(e){}</script>
+<style>html[data-theme='dark']{color-scheme:dark}html[data-theme='dark'] body{background:#020617 !important;color:#e2e8f0 !important}html[data-theme='dark'] .hdr{background:rgba(15,23,42,.95) !important}</style>
 </head>
 <body>
 <header class="hdr" role="banner">
@@ -27,7 +28,7 @@
     </nav>
     <div class="hdr-actions">
       <a class="hdr-gh" href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener" aria-label="GitHub">GitHub ↗</a>
-      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme"><span class="t-light" aria-hidden="true">🌙</span><span class="t-dark" aria-hidden="true">☀️</span></button>
+      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme" onclick="try{var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('resolvance-theme',t);h.style.background=t==='dark'?'#020617':'#f6f8fb';document.body.style.background=t==='dark'?'#020617':'#f6f8fb';}catch(e){}"><span class="t-light" aria-hidden="true">🌙</span><span class="t-dark" aria-hidden="true">☀️</span></button>
       <button id="mobile-nav" class="mobile-nav" aria-label="Menu" aria-expanded="false">☰</button>
     </div>
   </div>
