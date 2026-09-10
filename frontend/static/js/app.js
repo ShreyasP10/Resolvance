@@ -49,9 +49,9 @@ function initDOM(){
   });
   const browse=$('browse-btn');
   if(browse) browse.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation();}); // label handles natively
-  const fileInput=$('file');
-  if(fileInput){
-    fileInput.addEventListener('click',e=>e.stopPropagation());
+  const fileInput2=$('file');
+  if(fileInput2){
+    fileInput2.addEventListener('click',e=>e.stopPropagation());
   }
   const full=$('fullscreen-btn');
   if(full) full.addEventListener('click',()=>{
@@ -156,6 +156,35 @@ function updateCompareMode(){
   if(el) currentCompare=el.value;
   onSlider(slider?slider.value:50);
 }
+function togglePixelPeep(){
+  const peep=$('pixel-peep');
+  if(!peep) return;
+  const show=peep.hidden;
+  peep.hidden=!show;
+  peep.style.display=show?'grid':'none';
+  if(show) drawPixelPeep();
+}
+function drawPixelPeep(){
+  const leftImg=$('c-left'), rightImg=$('c-right');
+  const c1=$('peep-input'), c2=$('peep-sr');
+  if(!leftImg || !rightImg || !c1 || !c2) return;
+  [ [leftImg,c1], [rightImg,c2] ].forEach(([img,canvas])=>{
+    const ctx=canvas.getContext('2d');
+    const iw=img.naturalWidth, ih=img.naturalHeight;
+    if(!iw||!ih) return;
+    const sx=Math.max(0, (iw-300)/2), sy=Math.max(0, (ih-300)/2);
+    ctx.imageSmoothingEnabled=false;
+    ctx.clearRect(0,0,300,300);
+    try{ ctx.drawImage(img, sx, sy, 300, 300, 0, 0, 300, 300); }catch(e){}
+  });
+  // also compute diff stats for badge
+  try{
+    const diffStats=$('diff-stats');
+    if(diffStats && leftImg.naturalWidth){
+      diffStats.textContent='center 300×300 @100%';
+    }
+  }catch(e){}
+}
 function onSlider(v){
   const p=Number(v);
   if(valEl) valEl.textContent=p+'%';
@@ -171,6 +200,9 @@ function onSlider(v){
   if(rImg) rightEl.src=rImg;
   leftEl.style.clipPath=`inset(0 ${100-p}% 0 0)`;
   rightEl.style.clipPath=`inset(0 0 0 ${p}% 0)`;
+  // update pixel peep if open
+  const peep=$('pixel-peep');
+  if(peep && !peep.hidden) drawPixelPeep();
 }
 function renderProof(j){
   const m=j.metrics||{}, meta=j.meta||{};
@@ -300,7 +332,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   window.upload=upload;
 });
 function updateCompareMode(){ const el=$('compare-mode'); if(el){ currentCompare=el.value; onSlider(slider?slider.value:50);} }
-let currentCompare='input-sr';
 function onSlider(v){
   const p=Number(v); const valEl=$('slider-val'); if(valEl) valEl.textContent=p+'%';
   const handle=$('handle'); if(handle){ handle.style.left=p+'%'; handle.setAttribute('aria-valuenow',p);}
