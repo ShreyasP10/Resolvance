@@ -92,10 +92,10 @@ function escapeHTML(s){
 function initMaps(){
   if(!window.L) return;
   if(maps.input) return;
-  const opts={center:[19.1,72.8],zoom:11,zoomControl:true,attributionControl:false,preferCanvas:true};
-  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19});
+  // Simple CRS — no Earth base map, just your image
+  const opts={crs:L.CRS.Simple, zoomControl:true, attributionControl:false, preferCanvas:true, minZoom:-3, maxZoom:5};
   ['input','sr','heat','diff'].forEach(id=>{
-    const m=L.map('map-'+id,{...opts,layers:[sat]});
+    const m=L.map('map-'+id,{...opts});
     maps[id]=m; mapLayers[id]={};
     m.on('move',e=>{
       if(!window.syncEnabled && window.syncEnabled===false) return;
@@ -105,14 +105,13 @@ function initMaps(){
   });
 }
 function getBounds(){
-  let aspect=1;
+  // Simple CRS pixel bounds — image fills map, no Earth
+  let w=512, h=512;
   if(currentMeta && currentMeta.input_size){
     const raw=currentMeta.input_size.replace(/×/g,'x').split('x');
-    const w=parseInt(raw[0]), h=parseInt(raw[1]);
-    if(h>0) aspect=w/h;
+    w=parseInt(raw[0])||512; h=parseInt(raw[1])||512;
   }
-  const dLat=0.4, dLon=dLat*aspect/0.945;
-  return [[18.9,72.5],[18.9+dLat,72.5+dLon]];
+  return [[0,0],[h,w]];
 }
 function switchMapLayer(mapId, type){
   if(!maps[mapId] || !currentImages[mapId]) return;
@@ -140,7 +139,38 @@ function addImageOverlays(imgs){
     if(imgs.input && maps.input) mapLayers.input.rgb=L.imageOverlay(imgs.input,b,{opacity:0.95}).addTo(maps.input);
     if(imgs.sr && maps.sr) mapLayers.sr.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.95}).addTo(maps.sr);
     if(imgs.heatmap && maps.heat) mapLayers.heat.rgb=L.imageOverlay(imgs.heatmap,b,{opacity:0.95}).addTo(maps.heat);
-    if(imgs.sr && maps.diff) mapLayers.diff.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.85}).addTo(maps.diff);
+    // Diff: compute actual difference heatmap
+    if(imgs.input && imgs.sr && maps.diff){
+      const diffCanvas=document.createElement('canvas');
+      const w=300, h=300;
+      diffCanvas.width=w; diffCanvas.height=h;
+      const ctx=diffCanvas.getContext('2d');
+      const img1=new Image(), img2=new Image();
+      let loaded=0;
+      const tryDraw=()=>{
+        loaded++;
+        if(loaded<2) return;
+        try{
+          ctx.drawImage(img1,0,0,w,h);
+          const d1=ctx.getImageData(0,0,w,h);
+          ctx.clearRect(0,0,w,h);
+          ctx.drawImage(img2,0,0,w,h);
+          const d2=ctx.getImageData(0,0,w,h);
+          for(let i=0;i<d1.data.length;i+=4){
+            const r=Math.abs(d1.data[i]-d2.data[i]), g=Math.abs(d1.data[i+1]-d2.data[i+1]), b2=Math.abs(d1.data[i+2]-d2.data[i+2]);
+            const diff=Math.max(r,g,b2);
+            // viridis-like diff: low diff dark, high diff bright yellow
+            d1.data[i]=diff*1.2; d1.data[i+1]=diff*0.6+40; d1.data[i+2]=80; d1.data[i+3]=255;
+          }
+          ctx.putImageData(d1,0,0);
+          mapLayers.diff.rgb=L.imageOverlay(diffCanvas.toDataURL(),b,{opacity:0.95}).addTo(maps.diff);
+          const badge=$('diff-stats');
+          if(badge) badge.textContent='diff highlighted';
+        }catch(e){ mapLayers.diff.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.85}).addTo(maps.diff); }
+      };
+      img1.onload=tryDraw; img2.onload=tryDraw;
+      img1.src=imgs.input; img2.src=imgs.sr;
+    } else if(imgs.sr && maps.diff) mapLayers.diff.rgb=L.imageOverlay(imgs.sr,b,{opacity:0.85}).addTo(maps.diff);
     maps.input.fitBounds(L.latLngBounds(b));
   }catch(e){ console.warn('Leaflet overlay failed', e); }
   setTimeout(()=>Object.values(maps).forEach(m=>{ try{m.invalidateSize();}catch(e){}}),200);
@@ -155,35 +185,6 @@ function updateCompareMode(){
   const el=$('compare-mode');
   if(el) currentCompare=el.value;
   onSlider(slider?slider.value:50);
-}
-function togglePixelPeep(){
-  const peep=$('pixel-peep');
-  if(!peep) return;
-  const show=peep.hidden;
-  peep.hidden=!show;
-  peep.style.display=show?'grid':'none';
-  if(show) drawPixelPeep();
-}
-function drawPixelPeep(){
-  const leftImg=$('c-left'), rightImg=$('c-right');
-  const c1=$('peep-input'), c2=$('peep-sr');
-  if(!leftImg || !rightImg || !c1 || !c2) return;
-  [ [leftImg,c1], [rightImg,c2] ].forEach(([img,canvas])=>{
-    const ctx=canvas.getContext('2d');
-    const iw=img.naturalWidth, ih=img.naturalHeight;
-    if(!iw||!ih) return;
-    const sx=Math.max(0, (iw-300)/2), sy=Math.max(0, (ih-300)/2);
-    ctx.imageSmoothingEnabled=false;
-    ctx.clearRect(0,0,300,300);
-    try{ ctx.drawImage(img, sx, sy, 300, 300, 0, 0, 300, 300); }catch(e){}
-  });
-  // also compute diff stats for badge
-  try{
-    const diffStats=$('diff-stats');
-    if(diffStats && leftImg.naturalWidth){
-      diffStats.textContent='center 300×300 @100%';
-    }
-  }catch(e){}
 }
 function onSlider(v){
   const p=Number(v);
@@ -200,9 +201,6 @@ function onSlider(v){
   if(rImg) rightEl.src=rImg;
   leftEl.style.clipPath=`inset(0 ${100-p}% 0 0)`;
   rightEl.style.clipPath=`inset(0 0 0 ${p}% 0)`;
-  // update pixel peep if open
-  const peep=$('pixel-peep');
-  if(peep && !peep.hidden) drawPixelPeep();
 }
 function renderProof(j){
   const m=j.metrics||{}, meta=j.meta||{};
@@ -229,12 +227,15 @@ async function upload(){
   setStatus('Uploading & processing — this takes a minute on CPU...');
   showProgress(true,10);
   let pct=10; const iv=setInterval(()=>{ pct+= (90-pct)*0.05; showProgress(true,pct);},1000);
+  let j;
   try{
     const r=await fetch('/api/infer',{method:'POST',body:fd});
-    clearInterval(iv); showProgress(true,95);
-    const j=await r.json();
+    clearInterval(iv); showProgress(true,100);
+    const text=await r.text();
+    try{ j=JSON.parse(text); }catch(e){ throw new Error(`Server ${r.status}: ${text.slice(0,400)}`); }
+    await new Promise(res=>setTimeout(res,400));
     showProgress(false);
-    if(!j.success){ setStatus(j.error,true); return;}
+    if(!j.success){ setStatus(j.error||`Server ${r.status}`,true); return;}
     setStatus('Done ✓ — scroll down to see results');
     const resSec=$('results');
     if(resSec){ resSec.hidden=false; resSec.style.display='block'; resSec.removeAttribute('hidden');}

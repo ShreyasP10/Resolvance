@@ -28,7 +28,9 @@
     </nav>
     <div class="hdr-actions">
       <a class="hdr-gh" href="https://github.com/ShreyasP10/Resolvance" target="_blank" rel="noopener" aria-label="GitHub">GitHub ↗</a>
-      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme" onclick="try{var h=document.documentElement;var t=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',t);localStorage.setItem('resolvance-theme',t);h.style.background=t==='dark'?'#020617':'#f6f8fb';document.body.style.background=t==='dark'?'#020617':'#f6f8fb';}catch(e){}"><span class="t-light" aria-hidden="true">🌙</span><span class="t-dark" aria-hidden="true">☀️</span></button>
+      <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+        <span class="toggle-track"><span class="toggle-thumb"><span class="t-light" aria-hidden="true">🌙</span><span class="t-dark" aria-hidden="true">☀️</span></span></span>
+      </button>
       <button id="mobile-nav" class="mobile-nav" aria-label="Menu" aria-expanded="false">☰</button>
     </div>
   </div>
@@ -118,22 +120,8 @@
     </div>
 
     <div class="compare-section">
-      <div class="compare-head">
-        <label class="slider-label"><span>Compare</span>
-          <select id="compare-mode" aria-label="Comparison mode" onchange="updateCompareMode()"><option value="input-sr">Input 10m ↔ SR 3.3m</option><option value="input-heat">Input ↔ Heatmap</option><option value="sr-diff">SR ↔ Diff</option></select>
-          <input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider"><span id="slider-val">50%</span>
-        </label>
-        <span class="compare-hint">Drag slider • SR is 3× sharper — <b>pixelated left</b> vs <b>smooth right</b> at same scale</span>
-      </div>
-      <div class="compare" id="compare" role="img" aria-label="Comparison view"><img id="c-left" alt="Left" loading="lazy" style="image-rendering:pixelated"><img id="c-right" alt="Right" loading="lazy"><div class="handle" id="handle" tabindex="0" role="slider" aria-label="Compare handle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span class="handle-label left">10m</span><span class="handle-label right">3.3m</span></div></div>
-      <div class="compare-zoom">
-        <button type="button" class="btn secondary sm" onclick="togglePixelPeep()">🔍 Pixel-Peep 100% Crop</button>
-        <span class="muted" style="font-size:11px">Shows 300×300 center at true pixels — input looks blocky, SR stays sharp</span>
-      </div>
-      <div id="pixel-peep" hidden style="display:none;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-        <div style="text-align:center"><b style="font-size:11px">Input 100% (pixelated)</b><canvas id="peep-input" width="300" height="300" style="width:100%;max-width:300px;border:1px solid #e2e8f0;border-radius:8px;image-rendering:pixelated"></canvas></div>
-        <div style="text-align:center"><b style="font-size:11px">SR 100% (smooth)</b><canvas id="peep-sr" width="300" height="300" style="width:100%;max-width:300px;border:1px solid #e2e8f0;border-radius:8px"></canvas></div>
-      </div>
+      <label class="slider-label"><span>Compare</span><input type="range" id="slider" min="0" max="100" value="50" aria-label="Comparison slider"><span id="slider-val">50%</span></label>
+      <div class="compare" id="compare" role="img" aria-label="Comparison view"><img id="c-left" alt="Left" loading="lazy"><img id="c-right" alt="Right" loading="lazy"><div class="handle" id="handle" tabindex="0" role="slider" aria-label="Compare handle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"></div></div>
     </div>
 
     <div class="two">
@@ -164,6 +152,6 @@
 </footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="/static/js/app.js"></script>
+<script src="/static/js/app.js?v=5"></script>
 </body>
 </html>
