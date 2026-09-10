@@ -26,7 +26,7 @@ function initDOM(){
       if(ev.dataTransfer.files.length){$('file').files=ev.dataTransfer.files; updateFileName(); upload();}
     });
     drop.addEventListener('click',ev=>{
-      if(ev.target.closest('#file')||ev.target.closest('button')||ev.target.closest('.link-btn')) return;
+      if(ev.target.closest('#file')||ev.target.closest('button')||ev.target.closest('label')||ev.target.closest('.link-btn')||ev.target.closest('a')) return;
       $('file').click();
     });
     drop.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();$('file').click();}});
@@ -48,7 +48,11 @@ function initDOM(){
     slider.value=v; onSlider(v);
   });
   const browse=$('browse-btn');
-  if(browse) browse.addEventListener('click',e=>{e.stopPropagation();$('file').click();});
+  if(browse) browse.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation();}); // label handles natively
+  const fileInput=$('file');
+  if(fileInput){
+    fileInput.addEventListener('click',e=>e.stopPropagation());
+  }
   const full=$('fullscreen-btn');
   if(full) full.addEventListener('click',()=>{
     if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{}); else document.exitFullscreen();

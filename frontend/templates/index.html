@@ -84,9 +84,9 @@
       <div class="drop-icon-wrap" aria-hidden="true"><svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 12 15 15"/></svg></div>
       <h3>Drag &amp; drop 4-band <code>.tif</code> here</h3>
       <p class="muted">or click to browse • Supports <code>.tif .tiff .png .jpg</code> • Try <button type="button" class="link-btn" onclick="event.stopPropagation(); loadSample('sample/sentinel_10m_4band_512.tif')">sample 512</button> <button type="button" class="link-btn" onclick="event.stopPropagation(); loadSample('sample/sentinel_10m_8band_512.tif')">8-band</button></p>
-      <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg" hidden>
+      <input type="file" id="file" accept=".tif,.tiff,.png,.jpg,.jpeg" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">
       <div class="drop-actions">
-        <button class="btn primary" id="browse-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v9"/></svg> Browse Files</button>
+        <label for="file" class="btn primary" id="browse-btn" role="button" tabindex="0"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5-5 5 5M12 5v9"/></svg> Browse Files</label>
         <span id="file-name" class="file-name" aria-live="polite"></span>
       </div>
       <span id="status" class="status" aria-live="polite"></span>
