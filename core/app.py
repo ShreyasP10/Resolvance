@@ -1,6 +1,7 @@
 """Flask factory per UPDATED_SIH26142_FULL_v2.md:10"""
 from __future__ import annotations
 import time
+import threading
 from pathlib import Path
 from flask import Flask, render_template, send_from_directory, Response
 from flask_cors import CORS
@@ -21,6 +22,16 @@ def purge_stale(directory: Path, hours: int):
         except Exception: pass
     if rem: log.info(f"purged {rem} from {directory}")
 
+
+def _cleanup_loop(settings: Settings):
+    while True:
+        time.sleep(3600)  # Sleep for 1 hour
+        try:
+            purge_stale(settings.upload_dir, settings.retention_hours)
+            purge_stale(settings.results_dir, settings.retention_hours)
+        except Exception as e:
+            log.error(f"Cleanup thread error: {e}")
+
 def create_app(settings: Settings | None=None) -> Flask:
     if settings is None: settings=Settings.from_env()
     configure_logging()
@@ -33,6 +44,9 @@ def create_app(settings: Settings | None=None) -> Flask:
     if settings.retention_hours:
         purge_stale(settings.upload_dir, settings.retention_hours)
         purge_stale(settings.results_dir, settings.retention_hours)
+        # Start background cleanup thread
+        t = threading.Thread(target=_cleanup_loop, args=(settings,), daemon=True)
+        t.start()
     from api.routes import bp
     app.register_blueprint(bp)
     @app.route("/")

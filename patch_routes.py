@@ -1,4 +1,9 @@
-"""Routes per UPDATED_SIH26142_FULL_v2.md:12 LLD POST /api/infer"""
+import re
+
+with open('api/routes.py', 'r', encoding='utf-8') as f:
+    code = f.read()
+
+header_imports = """
 from __future__ import annotations
 from pathlib import Path
 import uuid
@@ -35,30 +40,30 @@ def job_status(job_id: str):
     else:
         # Processing
         return jsonify({"success": True, "status": "processing", "job_id": job_id}), 202
+"""
 
-@bp.route("/api/infer", methods=["POST"])
-def infer():
-    settings=current_app.config["SENTINEL_SETTINGS"]
-    pipeline=current_app.config["SENTINEL_PIPELINE"]
-    if "file" not in request.files:
-        return jsonify({"success": False, "error": "No file part"}), 400
-    f=request.files["file"]
-    if f.filename=="": return jsonify({"success": False, "error": "No selected file"}), 400
-    if not settings.is_allowed(f.filename):
-        return jsonify({"success": False, "error": "Invalid file format. Please upload a .tif, .tiff, .png, .jpg, or .jpeg file."}), 415
-    job_id=uuid.uuid4().hex
-    ext=Path(f.filename).suffix.lower()
-    up_path=settings.upload_dir / f"{job_id}{ext}"
-    f.save(str(up_path))
-    jobs[job_id] = {"status": "processing"}
+# Replace top part
+code = re.sub(r'from __future__.*?bp=Blueprint\("api", __name__\)', header_imports.strip(), code, flags=re.DOTALL)
+
+# Replace the try/except block in infer()
+old_infer_try = """    try:
+        result=pipeline.run(up_path, job_id=job_id)
+        return jsonify(result.to_dict()), 200
+    except DecodingError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except ProcessingError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Pipeline failure: {e}"}), 500"""
+
+new_infer_try = """    jobs[job_id] = {"status": "processing"}
     thread = threading.Thread(target=run_job_async, args=(pipeline, up_path, job_id))
     thread.start()
-    return jsonify({"success": True, "status": "processing", "job_id": job_id}), 202
+    return jsonify({"success": True, "status": "processing", "job_id": job_id}), 202"""
 
-@bp.route("/api/download/<path:filename>", methods=["GET"])
-def download(filename: str):
-    settings=current_app.config["SENTINEL_SETTINGS"]
-    return send_from_directory(settings.results_dir, filename, as_attachment=True)
+code = code.replace(old_infer_try, new_infer_try)
 
-@bp.route("/api/health", methods=["GET"])
-def health(): return jsonify({"status":"ok", "project":"Resolvance"}), 200
+with open('api/routes.py', 'w', encoding='utf-8') as f:
+    f.write(code)
+
+print("Backend Async Queue Implemented!")

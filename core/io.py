@@ -49,6 +49,9 @@ def read_geotiff(path: Path) -> GeoReadResult:
     try:
         with tifffile.TiffFile(str(path)) as tif:
             page = tif.pages[0]
+            # Defense against GeoTIFF decompression bombs
+            if page.imagewidth * page.imagelength > 25000000:
+                raise DecodingError("Image dimensions too large. Max 25 million pixels (5000x5000) allowed to prevent OOM.")
             raw = tif.asarray()  # full stack: handles multi-page planar (4,64,64)
             # Normalize to C x H x W
             if raw.ndim == 2:
@@ -108,7 +111,9 @@ def normalize_to_uint8_per_band(arr: np.ndarray) -> np.ndarray:
         if valid.size == 0:
             out[c]=np.zeros_like(band, dtype=np.uint8)
             continue
-        lo, hi = np.percentile(valid, [2,98])
+        # Downsample for percentile calculation to avoid massive memory/CPU spike on large TIFFs
+        step = max(1, valid.size // 1000000)
+        lo, hi = np.percentile(valid[::step], [2,98])
         if hi <= lo: lo, hi = float(valid.min()), float(valid.max())
         if hi <= lo:
             out[c]=np.zeros_like(band, dtype=np.uint8)
