@@ -644,7 +644,7 @@ py generate_ppt.py  # → Resolvance_SIH26142_AntarikshSetu.pptx (41 KB) → Exp
 | Member | Role |
 |--------|------|
 | Shreyas Pawar | Lead / Geospatial + DL |
-| *(add team members)* | |
+| Atharva Mahajan | Core Development & Backend |
 
 ---
 
